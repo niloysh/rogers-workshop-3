@@ -5,12 +5,12 @@ layout: page
 
 Welcome to **Workshop 3** in the Rogers Executive Workshop Series, presented as part of the Rogers Chair in Network Automation.
 
-This workshop builds on the previous sessions in the series:
+This workshop complements the previous sessions in the series:
 
 - [Workshop 1 – 5G Core Networks](https://niloysh.github.io/rogers-workshop/)
 - [Workshop 2 – Radio Access Networks (RAN)](https://mhmd97z.github.io/rogers-workshop-2/)
 
-Together, these workshops explore key components of modern programmable mobile networks.
+
 The first workshop focused on 5G core deployment, network slicing, slice monitoring and data processing, and dynamic resource scaling, while the second explored 5G RAN deployment, closed-loop controls in ORAN, and xApps development for monitoring and control
 
 In this third workshop, we turn our attention to the transport network, which interconnects the RAN and the core. Participants will learn how **Software-Defined Networking (SDN)** enables programmable and automated transport infrastructures.
@@ -52,7 +52,7 @@ Through a combination of lectures and hands-on labs, participants will explore p
          <td colspan="3" style="text-align:center; background-color:#f2f2f2;"> <strong>Lunch Break</strong> </td>
       </tr>
       <tr>
-         <td>1:30 PM - 2:30 PM</td>
+         <td>1:00 PM - 2:00 PM</td>
          <td>Session: SDN Controllers and ONOS</td>
          <td><a href="#">Slides</a></td>
       </tr>
@@ -60,14 +60,14 @@ Through a combination of lectures and hands-on labs, participants will explore p
          <td colspan="3" style="text-align:center; background-color:#f2f2f2;"> <strong>Coffee Break</strong> </td>
       </tr>
       <tr>
-         <td>2:45 PM - 4:00 PM</td>
+         <td>2:15 PM - 3:45 PM</td>
          <td>Lab: Network Control with ONOS</td>
          <td> <a href="#">Slides</a><br> <a href="#">Lab Exercises</a> </td>
       </tr>
       <tr>
-         <td>4:00 PM - 4:30 PM</td>
+         <td>3:45 PM - 4:00 PM</td>
          <td>Workshop Conclusion and Discussion</td>
-         <td><a href="#">Slides</a></td>
+         <td></td>
       </tr>
    </tbody>
 </table>

@@ -80,7 +80,7 @@ Topics:
 - Intent-based networking  
 
 # Lab 2 – Network Control with ONOS  
-**2:45 – 4:00**
+**2:15 – 3:45**
 
 ### Part 1: Walkthrough (20m)
 **Goal:** Understand how the SDN controller observes and manages the network.
@@ -112,7 +112,7 @@ Topics:
 - Inspect the updated path or flows
 
 
-### Part 4: Optional demo - Service differentiation under load (10 min)
+### Part 4: Optional demo - Service differentiation under load (20 min)
 
 **Goal:** Illustrate how transport policies can protect latency-sensitive services such as cloud gaming during congestion.
 
@@ -138,19 +138,8 @@ developed solutions for 5G slice monitoring and slice resource scaling.
 
 
 # Workshop Conclusion  
-**4:00 – 4:30**
+**3:45 – 4:00**
 
-### Goal
-Summarize key concepts from the workshop series.
-
-### Topics
-
-- Recap of the Rogers Executive Workshop Series  
-  - Workshop 1 – 5G Core Networks  
-  - Workshop 2 – Radio Access Networks (RAN)  
-  - Workshop 3 – Transport Networks  
-
-- Role of programmable networking in modern networks  
-- Relationship between data plane, control plane, and automation systems  
-- How SDN controllers enable centralized network control  
-- Discussion and questions
+### Goals
+- Talk about future workshops - GenAI?
+- Ask participants to fill out the feedback form.
