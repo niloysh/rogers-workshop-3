@@ -22,8 +22,8 @@ title: Rogers Executive Workshop 3
 email: rboutaba@uwaterloo.ca
 description: >- # this means to ignore newlines until "baseurl:"
   The third Rogers Executive Workshop, presented as part of the Rogers Chair in Network Automation.
-baseurl: "" # the subpath of your site, e.g. /blog
-url: "http://niloysh.github.io/" # the base hostname & protocol for your site, e.g. http://example.com
+baseurl: "/rogers-workshop-3"
+url: "https://niloysh.github.io/" # the base hostname & protocol for your site, e.g. http://example.com
 # twitter_username: jekyllrb
 # github_username:  jekyll
 

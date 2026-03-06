@@ -1,6 +1,6 @@
 ---
 permalink: /reading
-layout: default
+layout: page
 ---
 
 

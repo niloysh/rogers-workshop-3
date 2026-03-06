@@ -1,6 +1,6 @@
 ---
 permalink: /plan
-layout: default
+layout: page
 ---
 
 # Workshop 3 – Plan (Internal; Draft v1) 

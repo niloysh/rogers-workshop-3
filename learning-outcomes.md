@@ -1,6 +1,6 @@
 ---
 permalink: /learning-outcomes
-layout: default
+layout: page
 ---
 
 # Learning Outcomes

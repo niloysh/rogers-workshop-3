@@ -1,6 +1,6 @@
 ---
 permalink: /
-layout: default
+layout: page
 ---
 
 Welcome to **Workshop 3** in the Rogers Executive Workshop Series, presented as part of the Rogers Chair in Network Automation.
