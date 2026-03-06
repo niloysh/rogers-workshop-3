@@ -3,8 +3,6 @@ permalink: /learning-outcomes
 layout: page
 ---
 
-# Learning Outcomes
-
 By the end of this workshop, participants will:
 
 - Understand how modern transport networks can be programmatically controlled rather than configured manually on individual devices.
