@@ -20,7 +20,6 @@ Through a combination of lectures and hands-on labs, participants will explore p
 ## Workshop Schedule
 
 ### April 14, 2026 — Programmable Transport Networks
-
 <table border="0">
    <thead>
       <tr>
@@ -30,45 +29,91 @@ Through a combination of lectures and hands-on labs, participants will explore p
       </tr>
    </thead>
    <tbody>
-      <tr>
-         <td>9:00 AM - 9:15 AM</td>
-         <td>Workshop Introduction and Overview</td>
-         <td></td>
-      </tr>
-      <tr>
-         <td>9:15 AM - 10:30 AM</td>
-         <td>Session: Introduction to Software-Defined Networking</td>
-         <td><a href="#">Slides</a></td>
-      </tr>
-      <tr>
-         <td colspan="3" style="text-align:center; background-color:#f2f2f2;"> <strong>Coffee Break</strong> </td>
-      </tr>
-      <tr>
-         <td>10:45 AM - 12:00 PM</td>
-         <td>Lab: SDN Data Plane with Open vSwitch and Mininet</td>
-         <td> <a href="#">Slides</a><br> <a href="#">Lab Exercises</a> </td>
-      </tr>
-      <tr>
-         <td colspan="3" style="text-align:center; background-color:#f2f2f2;"> <strong>Lunch Break</strong> </td>
-      </tr>
-      <tr>
-         <td>1:00 PM - 2:00 PM</td>
-         <td>Session: SDN Controllers and ONOS</td>
-         <td><a href="#">Slides</a></td>
-      </tr>
-      <tr>
-         <td colspan="3" style="text-align:center; background-color:#f2f2f2;"> <strong>Coffee Break</strong> </td>
-      </tr>
-      <tr>
-         <td>2:15 PM - 3:45 PM</td>
-         <td>Lab: Network Control with ONOS</td>
-         <td> <a href="#">Slides</a><br> <a href="#">Lab Exercises</a> </td>
-      </tr>
-      <tr>
-         <td>3:45 PM - 4:00 PM</td>
-         <td>Workshop Conclusion and Discussion</td>
-         <td></td>
-      </tr>
+
+   <tr>
+      <td>9:00 AM - 9:15 AM</td>
+      <td>Workshop Introduction and Overview</td>
+      <td></td>
+   </tr>
+
+   <tr>
+      <td>9:15 AM - 9:35 AM</td>
+      <td>Concepts: Programmable Networking</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td>9:35 AM - 10:30 AM</td>
+      <td>Hands-on Lab: Flow-Based Forwarding with Open vSwitch and Mininet</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td colspan="3" style="text-align:center; background-color:#f2f2f2;">
+         <strong>Coffee Break</strong>
+      </td>
+   </tr>
+
+   <tr>
+      <td>10:45 AM - 11:10 AM</td>
+      <td>Concepts: Flow Tables and Network Policy</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td>11:10 AM - 12:00 PM</td>
+      <td>Hands-on Lab: Implementing Forwarding Policies</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td colspan="3" style="text-align:center; background-color:#f2f2f2;">
+         <strong>Lunch Break</strong>
+      </td>
+   </tr>
+
+   <tr>
+      <td>1:00 PM - 1:25 PM</td>
+      <td>Concepts: Centralized Network Control</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td>1:25 PM - 2:15 PM</td>
+      <td>Hands-on Lab: Controller-Based Networking</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td colspan="3" style="text-align:center; background-color:#f2f2f2;">
+         <strong>Coffee Break</strong>
+      </td>
+   </tr>
+
+   <tr>
+      <td>2:30 PM - 3:00 PM</td>
+      <td>Concepts: Network Automation and Intent</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td>3:00 PM - 3:30 PM</td>
+      <td>Hands-on Lab: Automated Network Control</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td>3:30 PM - 3:50 PM</td>
+      <td>Hands-on Lab: Service Differentiation Under Load</td>
+      <td>TBA</td>
+   </tr>
+
+   <tr>
+      <td>3:50 PM - 4:00 PM</td>
+      <td>Workshop Conclusion and Discussion</td>
+      <td></td>
+   </tr>
+
    </tbody>
 </table>
 
