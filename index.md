@@ -78,4 +78,5 @@ Through a combination of lectures and hands-on labs, participants will explore p
 - [Lab Exercises](labs)
 - [Additional Reading](reading)
 - [Internal Plan](plan) [To be removed]
+- [Workshop Feedback](https://docs.google.com/forms/d/e/1FAIpQLSeeYKe7PKKg0iLa_khv73pAFY2ke9KzenRFFz9bPcBhUPJ8mQ/viewform?usp=header)
 
