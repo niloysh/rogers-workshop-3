@@ -3,7 +3,7 @@ permalink: /plan
 layout: page
 ---
 
-# Workshop 3 – Plan (Internal; Draft v2)  
+# Workshop 3 – Plan (Internal; Draft v3)  
 **Programmable Transport Networks with SDN**  
 April 14
 
@@ -105,7 +105,7 @@ Goal: connect the first lab to the underlying **OpenFlow model**.
 
 ---
 
-# Lab 1 – Implementing Network Policy  
+# Lab 2 – Implementing Network Policy  
 **11:10 – 12:00**
 
 Participants extend the earlier experiment and implement simple forwarding policies.
@@ -163,7 +163,7 @@ Goal: explain why **centralized controllers** are needed in programmable network
 
 ---
 
-# Lab 2 – Controller-Based Connectivity  
+# Lab 3 – Controller-Based Connectivity  
 **1:25 – 2:15**
 
 This lab shows how controllers automate forwarding decisions across the network.
@@ -229,7 +229,7 @@ Goal: explain how network behavior can be **programmatically controlled through 
 
 ---
 
-# Lab 2 – Automated Network Control  
+# Lab 4 – Automated Network Control  
 **3:00 – 3:30**
 
 This lab introduces controller-driven automation using software interfaces.
@@ -261,7 +261,7 @@ Key takeaway: network policies can be implemented and automated through software
 
 ---
 
-# Lab 3 – Service Differentiation Under Load  
+# Lab 5 – Service Differentiation Under Load  
 **3:30 – 3:50**
 
 This activity illustrates how SDN policies can differentiate traffic when multiple flows compete for limited capacity.
