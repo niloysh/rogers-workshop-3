@@ -1,0 +1,207 @@
+# playbooks/workshop_tools.yml
+---
+- name: Install Workshop Tools
+  hosts: workshop_vms
+  become: true
+  gather_facts: true
+
+  vars:
+    workshop_user: ubuntu
+    workshop_user_home: "/home/{{ workshop_user }}"
+    python_version: "3"
+
+  # ────────────────────────────────────────────
+  # BASE UTILITIES
+  # ────────────────────────────────────────────
+  tasks:
+    - name: Install base utilities
+      ansible.builtin.apt:
+        name:
+          - curl
+          - wget
+          - unzip
+          - tar
+          - gnupg
+          - ca-certificates
+          - apt-transport-https
+          - software-properties-common
+          - lsb-release
+        state: present
+        update_cache: true
+
+  # ────────────────────────────────────────────
+  # VIM
+  # ────────────────────────────────────────────
+    - name: Install vim
+      ansible.builtin.apt:
+        name: vim
+        state: present
+
+    - name: Deploy sensible .vimrc for workshop user
+      ansible.builtin.copy:
+        dest: "{{ workshop_user_home }}/.vimrc"
+        owner: "{{ workshop_user }}"
+        group: "{{ workshop_user }}"
+        mode: "0644"
+        content: |
+          syntax on
+          set number
+          set tabstop=4
+          set shiftwidth=4
+          set expandtab
+          set autoindent
+          set ruler
+          set hlsearch
+          set incsearch
+          set background=dark
+          colorscheme desert
+
+  # ────────────────────────────────────────────
+  # VSCODE (desktop)
+  # ────────────────────────────────────────────
+    - name: Add Microsoft GPG key
+      ansible.builtin.shell: |
+        curl -fsSL https://packages.microsoft.com/keys/microsoft.asc \
+          | gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg
+      args:
+        creates: /etc/apt/keyrings/microsoft.gpg
+
+    - name: Add VSCode apt repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/vscode.list
+        mode: "0644"
+        content: |
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main
+
+    - name: Install VSCode
+      ansible.builtin.apt:
+        name: code
+        state: present
+        update_cache: true
+
+    - name: Install useful VSCode extensions for workshop user
+      ansible.builtin.shell: |
+        sudo -u {{ workshop_user }} code \
+          --install-extension ms-python.python \
+          --install-extension ms-python.vscode-pylance \
+          --install-extension redhat.vscode-yaml \
+          --install-extension ms-vscode-remote.remote-ssh \
+          --install-extension mechatroner.rainbow-csv \
+          --no-sandbox --user-data-dir /home/{{ workshop_user }}/.vscode
+      changed_when: true
+      # --no-sandbox needed when run as root/via sudo on headless systems
+
+  # ────────────────────────────────────────────
+  # GIT
+  # ────────────────────────────────────────────
+    - name: Install git
+      ansible.builtin.apt:
+        name: git
+        state: present
+
+    - name: Set global git user name
+      community.general.git_config:
+        name: user.name
+        scope: system
+        value: "Workshop User"
+
+    - name: Set global git email
+      community.general.git_config:
+        name: user.email
+        scope: system
+        value: "workshop@localhost"
+
+    - name: Set default git branch to main
+      community.general.git_config:
+        name: init.defaultBranch
+        scope: system
+        value: main
+
+    - name: Set git default editor to vim
+      community.general.git_config:
+        name: core.editor
+        scope: system
+        value: vim
+
+  # ────────────────────────────────────────────
+  # PYTHON DEV TOOLS
+  # ────────────────────────────────────────────
+    - name: Install Python and dev dependencies
+      ansible.builtin.apt:
+        name:
+          - "python{{ python_version }}"
+          - "python{{ python_version }}-pip"
+          - "python{{ python_version }}-venv"
+          - "python{{ python_version }}-dev"
+          - build-essential
+          - libssl-dev
+          - libffi-dev
+        state: present
+
+    - name: Upgrade pip
+      ansible.builtin.pip:
+        name: pip
+        state: latest
+        executable: pip3
+
+    - name: Install Python workshop packages globally
+      ansible.builtin.pip:
+        name:
+          - mininet          # Mininet Python API
+          - networkx         # Graph / topology work
+          - matplotlib
+          - scapy            # Packet crafting (SRv6 header building)
+          - requests         # ONOS REST API calls
+          - pyyaml
+          - black            # Formatter
+          - pylint
+        state: present
+        executable: pip3
+
+    - name: Create a workshop Python venv for participants
+      ansible.builtin.command:
+        cmd: "python3 -m venv {{ workshop_user_home }}/workshop-env"
+        creates: "{{ workshop_user_home }}/workshop-env"
+      become_user: "{{ workshop_user }}"
+
+    - name: Add venv activation to .bashrc
+      ansible.builtin.lineinfile:
+        path: "{{ workshop_user_home }}/.bashrc"
+        line: "source {{ workshop_user_home }}/workshop-env/bin/activate"
+        state: present
+
+  # ────────────────────────────────────────────
+  # WIRESHARK / TSHARK
+  # ────────────────────────────────────────────
+    - name: Pre-seed wireshark debconf to allow non-root capture
+      ansible.builtin.debconf:
+        name: wireshark-common
+        question: wireshark-common/install-setuid
+        value: "true"
+        vtype: boolean
+
+    - name: Install networking tools
+      ansible.builtin.apt:
+        name:
+          - wireshark
+          - tshark
+          - termshark       # Terminal UI for tshark
+          - tcpdump
+          - iputils-ping
+          - iperf3
+        state: present
+
+    - name: Add workshop user to wireshark group
+      ansible.builtin.user:
+        name: "{{ workshop_user }}"
+        groups: wireshark
+        append: true
+
+  # ────────────────────────────────────────────
+  # TMUX / SCREEN
+  # ────────────────────────────────────────────
+    - name: Install tmux
+      ansible.builtin.apt:
+        name:
+          - tmux
+        state: present

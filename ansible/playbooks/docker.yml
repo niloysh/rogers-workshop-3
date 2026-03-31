@@ -1,0 +1,49 @@
+# playbooks/docker.yml
+---
+- name: Install Docker
+  hosts: workshop_vms
+  become: true
+  gather_facts: false
+
+  vars:
+    docker_user: ubuntu
+
+  tasks:
+    - name: Check if Docker is already installed
+      ansible.builtin.command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install Docker via official script
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -fsSL https://get.docker.com | bash
+      args:
+        executable: /bin/bash
+      when: docker_check.rc != 0
+
+    - name: Enable and start Docker service
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ docker_user }}"
+        groups: docker
+        append: true
+
+    - name: Verify Docker installation
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+
+    - name: Print Docker version
+      ansible.builtin.debug:
+        msg: "{{ docker_version.stdout }}"
+
+    - name: Remind user to re-login for group membership
+      ansible.builtin.debug:
+        msg: "SSH out and back in for docker group membership to take effect."
