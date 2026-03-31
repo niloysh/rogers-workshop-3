@@ -1,0 +1,6 @@
+{
+    "markdown.marp.themes": [
+        "assets/css/marp.css",
+        "assets/css/marp-readable.css"
+    ]
+}

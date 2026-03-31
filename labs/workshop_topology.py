@@ -2,27 +2,52 @@
 """
 workshop_topology.py
 ────────────────────
-Defines the Mininet topology used across all 4 workshop exercises.
+Defines the Mininet topology used across all workshop labs.
 
 Physical layout:
 
-    h1 ── s1 ── mb1 ── s2 ── h2
-                │
-            (middlebox)
+    h1 ── s1 ────────── s2 ── h2
+           |             |
+           s3 ───────────┘
+           |
+          mb1
+           |
+          h3
 
     h1  : traffic source        (IPv4: 10.0.0.1,  SRv6 SID: fc00::1)
     h2  : traffic destination   (IPv4: 10.0.0.2,  SRv6 SID: fc00::2)
-    mb1 : middlebox             (IPv4: 10.0.0.3,  SRv6 SID: fc00::b1)
+    h3  : additional host       (IPv4: 10.0.0.3,  SRv6 SID: fc00::3)
+    mb1 : middlebox             (IPv4: 10.0.0.4,  SRv6 SID: fc00::b1)
     s1  : OVS switch 1
     s2  : OVS switch 2
+    s3  : OVS switch 3 (connects to middlebox)
 
-The middlebox simulates a service function (firewall, DPI, NAT, etc.).
-In the slicing exercise, video traffic is forced through mb1 before
-reaching h2. Bulk traffic takes the direct path s1 → s2 → h2.
+Why this topology?
+
+    Lab 1 — Flow rules:
+        Multiple switches give participants meaningful rule installation.
+        h1↔h2 requires rules on s1 and s2.
+        h1↔h3 requires rules on s1 and s3.
+        h2↔h3 isolation is non-trivial to enforce.
+
+    Lab 2 — ONOS + link failure:
+        The s1-s2-s3 triangle loop means ONOS can reroute traffic via s3
+        when the s1-s2 link goes down. Without a loop, rerouting is impossible.
+
+    Lab 3 — SRv6 path steering:
+        A direct path h1→s1→s2→h2 exists.
+        SRv6 forces the longer path h1→s1→s3→mb1→s3→s1→s2→h2.
+        This demonstrates that SRv6 is actually doing path control —
+        traffic takes the longer route only because the packet says so.
+
+    Lab 4 — Transport slice controller:
+        Same as Lab 3 with ONOS for topology discovery and flow rules.
 
 Usage:
     sudo python3 workshop_topology.py
-    sudo python3 workshop_topology.py --onos   # connect to ONOS controller
+    sudo python3 workshop_topology.py --onos      # connect to ONOS (Lab 2, 4)
+    sudo python3 workshop_topology.py --srv6      # enable SRv6 (Lab 3)
+    sudo python3 workshop_topology.py --onos --srv6  # full stack (Lab 4)
 """
 
 from mininet.topo import Topo
@@ -35,14 +60,12 @@ import argparse
 
 
 # ─── IPv4 addresses ───────────────────────────────────────────────────────────
-#
-# These are the standard Mininet IPv4 addresses used in Exercises 1 and 2.
-# In Exercise 3 and 4 we add IPv6/SRv6 addresses on top of these.
 
 HOST_IPS = {
     'h1':  '10.0.0.1/24',
     'h2':  '10.0.0.2/24',
-    'mb1': '10.0.0.3/24',
+    'h3':  '10.0.0.3/24',
+    'mb1': '10.0.0.4/24',
 }
 
 # ─── SRv6 Segment IDs (SIDs) ──────────────────────────────────────────────────
@@ -55,6 +78,7 @@ HOST_IPS = {
 SRV6_SIDS = {
     'h1':  'fc00::1',
     'h2':  'fc00::2',
+    'h3':  'fc00::3',
     'mb1': 'fc00::b1',
 }
 
@@ -69,56 +93,52 @@ LINK_BW_MBPS = 100   # 100Mbps per link — enough headroom for slicing demo
 
 class WorkshopTopo(Topo):
     """
-    The single topology used across all 4 workshop exercises.
+    The topology used across all 4 workshop labs.
 
     Mininet calls build() automatically when the topology is instantiated.
-    You should not need to modify this class — the topology is intentionally
-    simple so you can focus on the networking concepts, not the plumbing.
     """
 
     def build(self):
         # ── Hosts ──────────────────────────────────────────────────────────────
-        #
-        # addHost() creates a network namespace with a virtual ethernet interface.
-        # The 'ip' parameter sets the IPv4 address assigned at startup.
 
         h1  = self.addHost('h1',  ip=HOST_IPS['h1'])
         h2  = self.addHost('h2',  ip=HOST_IPS['h2'])
+        h3  = self.addHost('h3',  ip=HOST_IPS['h3'])
 
-        # The middlebox is just another host in Mininet — it has a network
-        # namespace and we can run arbitrary processes inside it.
-        # In a real network this would be a dedicated appliance (firewall, DPI box).
+        # The middlebox simulates a service function (firewall, DPI, NAT, etc.).
+        # It sits on s3 — off the direct h1→h2 path — so SRv6 is needed
+        # to force traffic through it.
         mb1 = self.addHost('mb1', ip=HOST_IPS['mb1'])
 
         # ── Switches ───────────────────────────────────────────────────────────
-        #
-        # OVS switches are the data plane. In Exercise 1 you program them
-        # manually with ovs-vsctl. In Exercise 2, ONOS takes over via OpenFlow.
 
         s1 = self.addSwitch('s1', cls=OVSSwitch, protocols='OpenFlow13')
         s2 = self.addSwitch('s2', cls=OVSSwitch, protocols='OpenFlow13')
+        s3 = self.addSwitch('s3', cls=OVSSwitch, protocols='OpenFlow13')
 
         # ── Links ──────────────────────────────────────────────────────────────
         #
-        # TCLink gives us bandwidth control. All links share the same cap
-        # so the topology is symmetric and easy to reason about.
+        # Host links
+        self.addLink(h1,  s1, cls=TCLink, bw=LINK_BW_MBPS)
+        self.addLink(h2,  s2, cls=TCLink, bw=LINK_BW_MBPS)
+        self.addLink(h3,  s3, cls=TCLink, bw=LINK_BW_MBPS)
+        self.addLink(mb1, s3, cls=TCLink, bw=LINK_BW_MBPS)
 
-        self.addLink(h1,  s1,  cls=TCLink, bw=LINK_BW_MBPS)
-        self.addLink(h2,  s2,  cls=TCLink, bw=LINK_BW_MBPS)
-        self.addLink(mb1, s1,  cls=TCLink, bw=LINK_BW_MBPS)
-        self.addLink(s1,  s2,  cls=TCLink, bw=LINK_BW_MBPS)
+        # Switch links — s1-s2-s3 triangle provides loop for rerouting (Lab 2)
+        # and an alternate path bypassing mb1 (Labs 3, 4)
+        self.addLink(s1, s2, cls=TCLink, bw=LINK_BW_MBPS)
+        self.addLink(s2, s3, cls=TCLink, bw=LINK_BW_MBPS)
+        self.addLink(s1, s3, cls=TCLink, bw=LINK_BW_MBPS)
 
 
 def configure_srv6(net):
     """
     Assign SRv6 SIDs to each host and enable SRv6 in the kernel.
 
-    This is called automatically when you run the topology in Exercise 3+.
-    In Exercise 1 and 2 you can skip this — it's not needed for basic
-    OpenFlow / intent exercises.
+    Called automatically with --srv6 flag. Not needed for Labs 1 and 2.
 
     What this does on each host:
-      - Assigns the SRv6 SID as a /128 loopback-style address
+      - Assigns the SRv6 SID as a /128 address on the host interface
       - Enables IPv6 forwarding
       - Enables SRv6 header processing (seg6_enabled)
     """
@@ -126,17 +146,14 @@ def configure_srv6(net):
 
     for name, sid in SRV6_SIDS.items():
         host = net[name]
-
-        # Assign the SID as a /128 address on the host's interface.
-        # /128 means "this exact address belongs to me" — like a loopback.
         iface = f"{name}-eth0"
+
+        # Assign the SID as a /128 address — like a loopback, this exact
+        # address belongs to this node and is used as its segment identifier.
         host.cmd(f'ip -6 addr add {sid}/128 dev {iface}')
 
-        # Enable IPv6 forwarding — needed for transit and endpoint behaviour
+        # Enable IPv6 forwarding and SRv6 header processing
         host.cmd('sysctl -w net.ipv6.conf.all.forwarding=1')
-
-        # Enable SRv6 header processing.
-        # Without this the kernel ignores the SRH and drops the packet.
         host.cmd('sysctl -w net.ipv6.conf.all.seg6_enabled=1')
         host.cmd(f'sysctl -w net.ipv6.conf.{iface}.seg6_enabled=1')
 
@@ -146,35 +163,31 @@ def configure_srv6(net):
 
 
 def print_topology_info(net):
-    """Print a summary of the running topology for participants."""
+    """Print a summary of the running topology."""
     print("\n" + "═" * 60)
     print("  Workshop Topology")
     print("═" * 60)
     print("""
-    h1 ── s1 ── mb1 ── s2 ── h2
-                │
-            (middlebox)
+    h1 ── s1 ────────── s2 ── h2
+           |             |
+           s3 ───────────┘
+           |
+          mb1
+           |
+          h3
     """)
     print(f"  {'Node':<8} {'IPv4':<16} {'SRv6 SID'}")
     print(f"  {'────':<8} {'────':<16} {'────────'}")
-    for name in ['h1', 'h2', 'mb1']:
-        host = net[name]
+    for name in ['h1', 'h2', 'h3', 'mb1']:
         print(f"  {name:<8} {HOST_IPS[name]:<16} {SRV6_SIDS[name]}")
     print()
-    print("  Switches: s1 (OpenFlow13), s2 (OpenFlow13)")
+    print("  Switches: s1, s2, s3 (OpenFlow13) — triangle topology")
     print("  Links:    100Mbps, TCLink")
     print("═" * 60 + "\n")
 
 
 def run(use_onos=False, enable_srv6=False):
     setLogLevel('info')
-
-    # ── Choose controller ──────────────────────────────────────────────────────
-    #
-    # Exercise 1: DefaultController (OVS internal) — no external controller
-    # Exercise 2: RemoteController  — ONOS running in Docker on port 6653
-    # Exercise 3: DefaultController — SRv6 is host-based, no controller needed
-    # Exercise 4: RemoteController  — ONOS for topology + flow rules
 
     if use_onos:
         print("[Controller] Connecting to ONOS at 127.0.0.1:6653")
@@ -190,8 +203,8 @@ def run(use_onos=False, enable_srv6=False):
         controller=controller,
         switch=OVSSwitch,
         link=TCLink,
-        autoSetMacs=True,    # assign readable MAC addresses (00:00:00:00:00:01 etc)
-        waitConnected=True,  # wait for switches to connect to controller
+        autoSetMacs=True,
+        waitConnected=True,
     )
 
     net.start()
@@ -201,7 +214,6 @@ def run(use_onos=False, enable_srv6=False):
 
     print_topology_info(net)
 
-    # Drop into the Mininet CLI so participants can run commands interactively
     CLI(net)
 
     net.stop()
@@ -212,12 +224,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--onos',
         action='store_true',
-        help='Connect switches to ONOS controller (use in Ex2 and Ex4)'
+        help='Connect switches to ONOS controller (Labs 2 and 4)'
     )
     parser.add_argument(
         '--srv6',
         action='store_true',
-        help='Assign SRv6 SIDs and enable SRv6 on all hosts (use in Ex3 and Ex4)'
+        help='Assign SRv6 SIDs and enable SRv6 on all hosts (Labs 3 and 4)'
     )
     args = parser.parse_args()
 
