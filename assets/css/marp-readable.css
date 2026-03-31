@@ -386,6 +386,11 @@ tbody tr:last-child td {
     margin: 0 auto;
 }
 
+.slide-figure.compact img {
+    max-width: 620px;
+    max-height: 220px;
+}
+
 .cols {
     display: grid;
     grid-template-columns: 1fr 1fr;

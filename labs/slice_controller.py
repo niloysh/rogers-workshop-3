@@ -49,7 +49,7 @@ from mininet.link import TCLink
 from mininet.log import setLogLevel
 
 # Import our shared topology definition
-from workshop_topology import WorkshopTopo, SRV6_SIDS, HOST_IPS
+from labs.lab2.workshop_topology import WorkshopTopo, SRV6_SIDS, HOST_IPS
 
 
 # ─── ONOS connection settings ─────────────────────────────────────────────────
@@ -635,7 +635,7 @@ Examples:
     net.start()
 
     # Enable SRv6 on all hosts
-    from workshop_topology import configure_srv6
+    from labs.lab2.workshop_topology import configure_srv6
     configure_srv6(net)
 
     # Create the controller
