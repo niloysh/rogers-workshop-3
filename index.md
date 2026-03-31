@@ -87,14 +87,14 @@ In this third workshop, we turn our attention to the transport network, which in
       <div class="block-title">Lab 1 — Programmable forwarding with OVS + Mininet</div>
       <div class="block-desc">Build a network topology in Mininet and program OVS switches directly with flow rules. You are the control plane.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials — TBA</a>
+        <a class="materials-link available" href="assets/slides/lab1.html" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials</a>
       </div>
     </div>
-    <div class="schedule-dur">65 min</div>
+    <div class="schedule-dur">60 min</div>
   </div>
 
   <div class="schedule-row row-break">
-    <div class="schedule-time">10:40</div>
+    <div class="schedule-time">10:35</div>
     <div class="schedule-block">
       <div class="block-title">Coffee break</div>
     </div>
@@ -102,7 +102,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-concepts">
-    <div class="schedule-time">10:55</div>
+    <div class="schedule-time">10:50</div>
     <div class="schedule-block">
       <div class="block-title">Concepts 2 — OpenFlow, controllers and intents</div>
       <div class="block-desc">The OpenFlow model behind Lab 1, how an SDN controller automates it, and how intents express network policy at a higher level of abstraction.</div>
@@ -114,19 +114,19 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-lab">
-    <div class="schedule-time">11:20</div>
+    <div class="schedule-time">11:15</div>
     <div class="schedule-block">
       <div class="block-title">Lab 2 — Controller-based connectivity with ONOS</div>
       <div class="block-desc">Connect your topology to ONOS and use the REST API in Python to query the network, install host intents, and observe automatic re-routing after a link failure.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials — TBA</a>
+        <a class="materials-link available" href="assets/slides/lab2.html" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials</a>
       </div>
     </div>
-    <div class="schedule-dur">50 min</div>
+    <div class="schedule-dur">60 min</div>
   </div>
 
   <div class="schedule-row row-break">
-    <div class="schedule-time">12:10</div>
+    <div class="schedule-time">12:15</div>
     <div class="schedule-block">
       <div class="block-title">Lunch break</div>
     </div>
@@ -134,7 +134,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-concepts">
-    <div class="schedule-time">1:10</div>
+    <div class="schedule-time">1:15</div>
     <div class="schedule-block">
       <div class="block-title">Concepts 3 — Network slicing and SRv6</div>
       <div class="block-desc">How network virtualization enables transport slicing, hard vs soft isolation, and how SRv6 provides path control using standard IPv6 extension headers.</div>
@@ -146,7 +146,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-lab">
-    <div class="schedule-time">1:40</div>
+    <div class="schedule-time">1:45</div>
     <div class="schedule-block">
       <div class="block-title">Lab 3 — SRv6 path programming</div>
       <div class="block-desc">Assign SRv6 segment IDs, program a Segment Routing Header on an ingress host, and steer traffic through a middlebox. Inspect the SRH in transit with tshark.</div>
@@ -158,7 +158,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-break">
-    <div class="schedule-time">2:25</div>
+    <div class="schedule-time">2:30</div>
     <div class="schedule-block">
       <div class="block-title">Coffee break</div>
     </div>
@@ -166,7 +166,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-lab">
-    <div class="schedule-time">2:40</div>
+    <div class="schedule-time">2:45</div>
     <div class="schedule-block">
       <div class="block-title">Lab 4 — Transport slice controller</div>
       <div class="block-desc">Bring everything together. A provided controller combines ONOS, SRv6, and OVS queuing to demonstrate transport slice provisioning — then extend it with your own second slice.</div>
@@ -178,7 +178,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-shared">
-    <div class="schedule-time">3:50</div>
+    <div class="schedule-time">3:55</div>
     <div class="schedule-block">
       <div class="block-title">Wrap-up and Q&amp;A</div>
       <div class="block-desc">Open discussion and workshop feedback.</div>

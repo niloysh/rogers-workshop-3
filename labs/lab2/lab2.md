@@ -81,6 +81,8 @@ Today ONOS does that work automatically:
 
 ---
 
+<!-- _class: compact -->
+
 # Before you start
 
 For this lab:
@@ -98,6 +100,8 @@ You will use:
 - one regular shell for the checker, `curl`, and `ovs-ofctl`
 
 ---
+
+<!-- _class: compact -->
 
 # Check ONOS
 
@@ -149,6 +153,8 @@ For the first part of the lab, pay attention to:
 
 ---
 
+<!-- _class: compact -->
+
 # Connect to the ONOS CLI
 
 In a second terminal, connect to the ONOS Karaf CLI:
@@ -167,6 +173,8 @@ onos> apps -a -s
 > **You will use the CLI for** app activation, topology inspection, and intent inspection.
 
 ---
+
+<!-- _class: compact -->
 
 # Activate the required apps
 
@@ -188,6 +196,8 @@ onos> devices
 > **Why activate `fwd` now** It makes the first discovery and connectivity checks work cleanly. You will turn it off before the intent demo.
 
 ---
+
+<!-- _class: compact -->
 
 # Explore topology from the ONOS CLI
 
@@ -216,6 +226,8 @@ onos> hosts
 > **What this shows** ONOS learns switches and links first, then learns hosts after traffic appears.
 
 ---
+
+<!-- _class: compact -->
 
 # Inspect reactive forwarding
 
@@ -278,6 +290,8 @@ Keep the same Mininet topology running.
 
 ---
 
+<!-- _class: compact -->
+
 # Install a host intent
 
 First confirm ONOS still knows the hosts:
@@ -338,6 +352,8 @@ of:0000000000000001/2-of:0000000000000002/2; cost=1.0
 
 ---
 
+<!-- _class: compact -->
+
 # Tear down the direct link
 
 Disable the `s1-s2` link, then check the path again:
@@ -365,6 +381,8 @@ of:0000000000000001/3-of:0000000000000003/3==>of:0000000000000003/2-of:000000000
 > **What this shows** The intent stays installed, but ONOS recomputes the path and moves traffic over `s1 -> s3 -> s2`.
 
 ---
+
+<!-- _class: compact -->
 
 # Restore the direct path
 
@@ -420,6 +438,8 @@ Query ONOS first with `curl`, then from Python
 
 ---
 
+<!-- _class: compact -->
+
 # Start with `curl`
 
 You can query the ONOS REST API directly from your regular shell:
@@ -446,6 +466,8 @@ Useful endpoints:
 | `/intents`          | installed intents      |
 
 ---
+
+<!-- _class: compact -->
 
 # Add a flow rule with `curl`
 
@@ -474,6 +496,8 @@ sudo ovs-ofctl -O OpenFlow13 dump-flows s1
 
 ---
 
+<!-- _class: compact -->
+
 # Remove a flow rule with the REST API
 
 To remove a rule, you need:
@@ -497,6 +521,8 @@ curl -u onos:rocks -X DELETE \
 > **Why this matters** Your Lab 2 app will use the same two ideas: POST new rules when a path is chosen, then DELETE old rules when the path changes.
 
 ---
+
+<!-- _class: compact -->
 
 # Query devices from Python
 
@@ -524,6 +550,8 @@ python3 query_topology.py
 > **You should see** Three device IDs, each with `available` set to `True`.
 
 ---
+
+<!-- _class: compact -->
 
 # Query links and hosts
 
@@ -581,7 +609,7 @@ Building a small controller-side application
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # What You Will Build
 
@@ -597,7 +625,7 @@ In this challenge, you will write a small ONOS-facing Python app that:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Keep These Open
 
@@ -616,7 +644,7 @@ During the independent challenge, keep these terminals open:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Files You Will Use
 
@@ -631,7 +659,7 @@ Use these files for the challenge:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Get Ready
 
@@ -656,7 +684,7 @@ If it fails:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # How To Think About It
 
@@ -672,7 +700,7 @@ Break the challenge into five milestones:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Step 1: Find Hosts
 
@@ -698,7 +726,7 @@ for h in hosts:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Step 2: Inspect The Path
 
@@ -732,7 +760,7 @@ for link in paths[0]['links']:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # What Your App Adds
 
@@ -747,7 +775,7 @@ Your app starts with the same two steps, then adds:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Do It In This Order
 
@@ -771,7 +799,7 @@ If you get stuck, compare your work with:
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Check your work
 
@@ -799,7 +827,7 @@ sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Troubleshooting
 
@@ -813,7 +841,7 @@ sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Hints
 
