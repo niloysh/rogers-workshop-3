@@ -116,8 +116,8 @@ def main() -> int:
     print()
     print("Next steps in the lab:")
     print("  1. Verify SID reachability with ping6")
-    print("  2. Start the service processes with the helper scripts")
-    print("  3. Add the SRv6 route on h1")
+    print("  2. Start the HTTP server and IDS with the helper scripts")
+    print("  3. Add the SRv6 encap route on h1")
     return 0
 
 

@@ -8,8 +8,8 @@ Run this from a regular shell:
     ./run_mb2_ids.sh
 
 Behaviour:
-    - Passively sniffs IPv6 traffic passing through mb2
-    - Inspects the request URL for suspicious patterns
+    - Passively sniffs SRv6 transport traffic passing through mb2
+    - Inspects encapsulated HTTP request URLs for suspicious patterns
     - Prints [ALERT] for suspicious requests, [OK] for normal ones
     - Traffic always passes through — IDS never blocks
 
@@ -62,12 +62,13 @@ def inspect_packet(pkt):
     if not payload.startswith(('GET ', 'POST ', 'PUT ', 'DELETE ')):
         return
 
-    if pkt.haslayer(IPv6):
-        src_ip = pkt[IPv6].src
-        dst_ip = pkt[IPv6].dst
-    elif pkt.haslayer(IP):
+    # Prefer the inner/original packet addresses when they are present.
+    if pkt.haslayer(IP):
         src_ip = pkt[IP].src
         dst_ip = pkt[IP].dst
+    elif pkt.haslayer(IPv6):
+        src_ip = pkt[IPv6].src
+        dst_ip = pkt[IPv6].dst
     else:
         return
 
@@ -95,7 +96,7 @@ def main():
     iface = 'mb2-eth0'
 
     print(f"[mb2 IDS] Starting on {iface}...")
-    print(f"[mb2 IDS] Monitoring IPv6 traffic and inspecting HTTP requests")
+    print(f"[mb2 IDS] Monitoring SRv6 transport traffic and inspecting encapsulated HTTP requests")
     print(f"[mb2 IDS] Suspicious patterns: {', '.join(SUSPICIOUS_PATTERNS)}")
     print(f"[mb2 IDS] Log file: /tmp/mb2_ids.log")
     print(f"[mb2 IDS] Waiting for traffic... (traffic only appears if SRv6 is active)\n")

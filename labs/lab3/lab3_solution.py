@@ -11,8 +11,8 @@ Run from the Mininet CLI after completing the guided lab:
   mininet> h2 python3 lab3_solution.py
 
 Or manually:
-  mininet> h2 ip -6 route add fc00::1 encap seg6 mode inline \\
-             segs fc00::b2,fc00::b1 dev h2-eth0
+  mininet> h2 ip route add 10.0.0.1 encap seg6 mode encap \\
+             segs fc00::b2,fc00::b1,fc00::1 dev h2-eth0
 """
 
 import subprocess
@@ -34,12 +34,13 @@ def main():
     print("\n[solution] Installing reverse SRv6 route on h2...\n")
 
     # Install reverse route: h2 → mb2 → mb1 → h1
-    # With mode inline, segs lists only the waypoints.
-    # The final destination remains the packet's normal IPv6 destination.
+    # With mode encap, the original IPv4 packet stays inside a new outer
+    # IPv6+SRH transport packet. The segs list includes the final SRv6
+    # destination as well as the waypoints.
     rc = run(
-        "ip -6 route add fc00::1 "
-        "encap seg6 mode inline "
-        "segs fc00::b2,fc00::b1 "
+        "ip route replace 10.0.0.1 "
+        "encap seg6 mode encap "
+        "segs fc00::b2,fc00::b1,fc00::1 "
         "dev h2-eth0"
     )
 
@@ -53,37 +54,37 @@ def main():
         sys.exit(1)
 
     print("\n[solution] Route installed. Verifying...\n")
-    run("ip -6 route show")
+    run("ip route show")
 
     print("""
 [solution] Explanation:
   The reverse chain is h2 → mb2 → mb1 → h1.
-  mb2 (IDS) is visited before mb1 (firewall) in the reverse direction.
+  mb2 (IDS) is visited before mb1 (waypoint 1) in the reverse direction.
 
   Why this order?
-    In the forward direction (h1→mb1→mb2→h2):
-      - mb1 filters first (drop non-HTTP)
-      - mb2 inspects what passes (log HTTP)
+    In the forward direction, traffic visits mb1 then mb2 before h2.
+    In the reverse direction, we mirror that chain from the h2 side:
+      - traffic leaves h2 and reaches mb2 first
+      - then it passes through mb1
+      - then it arrives at h1
 
-    In the reverse direction (h2→mb2→mb1→h1):
-      - mb2 is still the first waypoint in the chain
-      - mb1 then applies the same IPv6 forwarding policy on the reverse path
-
-    If the order were reversed (mb1 before mb2):
-      - mb1 would see the traffic before the IDS
-      - for blocked traffic such as ICMPv6, mb1 could drop it before mb2
-        ever sees it
-
-    The principle: IDS sees more if placed before the firewall.
-    The firewall ensures only permitted traffic continues past it.
+    If the order were reversed:
+      - the return path would no longer mirror the intended service chain
+      - mb2 would not be the first inspection point on the way back
+      - your reverse-path capture would show a different service order
 
 [solution] Test commands:
-  Open a shell in mb2 from a regular shell:
-    ./enter_host.sh mb2
-  Then inside mb2:
-    tshark -i mb2-eth0 -Y "ipv6.routing.type == 4" -c 2
+  Open a shell in mb1 from a regular shell:
+    ./enter_host.sh mb1
+  Then inside mb1:
+    tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
   And from Mininet CLI:
-    mininet> h2 ping6 -c 3 fc00::1      # reaches mb2 first, then is BLOCKED by mb1
+    mininet> h1 ping -c 3 10.0.0.2
+
+  Before the reverse route:
+    - mb1 mainly sees only the echo requests
+  After the reverse route:
+    - mb1 sees both the echo requests and the echo replies
 """)
 
 

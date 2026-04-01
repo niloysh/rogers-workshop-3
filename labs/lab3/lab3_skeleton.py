@@ -14,8 +14,8 @@ Prerequisites:
 
 Tasks:
   1. Install the reverse SRv6 route on h2
-  2. Verify reverse traffic reaches mb2 first
-  3. Test that ping from h2 to h1 is blocked by mb1
+  2. Verify that ping replies now traverse mb1
+  3. Explain why the reverse segs order is mb2 then mb1
 
 Run from the Mininet CLI:
   mininet> h2 python3 lab3_skeleton.py
@@ -40,19 +40,24 @@ Goal:
 Commands to run from Mininet CLI (mininet> h2 ...):
 
   # TODO: Install reverse SRv6 route on h2
-  # Hint: destination is fc00::1 (h1's SID)
-  # Hint: segs order for h2 → mb2 → mb1 → h1 is ?
+  # Hint: destination is 10.0.0.1 (h1's IPv4 address)
+  # Hint: outer segs order for h2 → mb2 → mb1 → h1 is ?
 
-  h2 ip -6 route add _______ \\
-    encap seg6 mode inline \\
+  h2 ip route add _______ \\
+    encap seg6 mode encap \\
     segs _______ \\
     dev h2-eth0
 
 Verify:
-  ./enter_host.sh mb2
-  # then inside mb2:
-  tshark -i mb2-eth0 -Y "ipv6.routing.type == 4" -c 2
-  mininet> h2 ping6 -c 3 fc00::1      # should reach mb2 first, then be blocked by mb1
+  ./enter_host.sh mb1
+  # then inside mb1:
+  tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
+  mininet> h1 ping -c 3 10.0.0.2
+
+  Before the reverse route:
+    - you should mainly see only the echo requests on mb1
+  After the reverse route:
+    - you should see both echo requests and echo replies on mb1
 
 Explain in a comment below:
   Why does the reverse chain visit mb2 before mb1?

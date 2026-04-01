@@ -7,23 +7,21 @@ Lab 3 topology — SRv6 Service Function Chaining.
 Physical layout:
 
     h1 ── s1 ── s2 ── h2
-                |
-               mb1  (firewall)
-                |
-               mb2  (IDS)
+                ├── mb1  (waypoint 1)
+                └── mb2  (IDS)
 
     h1  : traffic source       (IPv4: 10.0.0.1,  SRv6 SID: fc00::1)
     h2  : traffic destination  (IPv4: 10.0.0.2,  SRv6 SID: fc00::2)
-    mb1 : firewall             (IPv4: 10.0.0.3,  SRv6 SID: fc00::b1)
+    mb1 : waypoint 1           (IPv4: 10.0.0.3,  SRv6 SID: fc00::b1)
     mb2 : IDS                  (IPv4: 10.0.0.4,  SRv6 SID: fc00::b2)
     s1  : OVS switch 1
     s2  : OVS switch 2
 
 Service chain:
-    h1 → mb1 (firewall) → mb2 (IDS) → h2
+    h1 → mb1 (waypoint 1) → mb2 (IDS) → h2
 
-    mb1 allows HTTP (port 80), blocks everything else
-    mb2 inspects HTTP payloads, alerts on suspicious patterns
+    mb1 is the first service waypoint
+    mb2 inspects tunneled HTTP payloads and alerts on suspicious patterns
 
 Why this topology?
     The direct path h1→s1→s2→h2 bypasses both service functions.
@@ -34,8 +32,8 @@ Why this topology?
       - malicious requests go undetected
 
     With SRv6:
-      - mb1 blocks non-HTTP traffic (e.g. ping)
-      - mb2 inspects HTTP payloads and alerts on suspicious patterns
+      - the outer SRv6 packet is forced through mb1 then mb2
+      - mb2 inspects tunneled HTTP payloads and alerts on suspicious patterns
       - malicious requests are detected even though they still reach h2
 
 Usage:
@@ -95,14 +93,13 @@ def print_topology_info():
     print("""
     h1 ── s1 ── s2 ── h2
                 |
-               mb1  (firewall — allows HTTP, blocks rest)
-                |
-               mb2  (IDS — inspects HTTP, alerts on suspicious)
+               ├── mb1  (waypoint 1)
+               └── mb2  (IDS — inspects tunneled HTTP)
     """)
     print(f"  {'Node':<8} {'IPv4':<16} {'SRv6 SID':<16} {'Role'}")
     print(f"  {'────':<8} {'────':<16} {'────────':<16} {'────'}")
     roles = {'h1': 'source', 'h2': 'destination',
-             'mb1': 'firewall', 'mb2': 'IDS'}
+             'mb1': 'waypoint 1', 'mb2': 'IDS'}
     for name in ['h1', 'h2', 'mb1', 'mb2']:
         print(f"  {name:<8} {HOST_IPS[name]:<16} "
               f"{SRV6_SIDS[name]:<16} {roles[name]}")

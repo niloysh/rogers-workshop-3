@@ -11,4 +11,4 @@ if [[ -z "${pid}" ]]; then
 fi
 
 echo "Starting Python HTTP server inside h2 (pid ${pid})..."
-exec sudo mnexec -a "${pid}" python3 -m http.server 80 --bind ::
+exec sudo mnexec -a "${pid}" python3 -m http.server 80 --bind 0.0.0.0

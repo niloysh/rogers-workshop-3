@@ -154,11 +154,11 @@ In this third workshop, we turn our attention to the transport network, which in
         <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials — TBA</a>
       </div>
     </div>
-    <div class="schedule-dur">45 min</div>
+    <div class="schedule-dur">60 min</div>
   </div>
 
   <div class="schedule-row row-break">
-    <div class="schedule-time">2:30</div>
+    <div class="schedule-time">2:45</div>
     <div class="schedule-block">
       <div class="block-title">Coffee break</div>
     </div>
@@ -166,7 +166,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-lab">
-    <div class="schedule-time">2:45</div>
+    <div class="schedule-time">3:00</div>
     <div class="schedule-block">
       <div class="block-title">Lab 4 — Transport slice controller</div>
       <div class="block-desc">Bring everything together. A provided controller combines ONOS, SRv6, and OVS queuing to demonstrate transport slice provisioning — then extend it with your own second slice.</div>
@@ -178,7 +178,7 @@ In this third workshop, we turn our attention to the transport network, which in
   </div>
 
   <div class="schedule-row row-shared">
-    <div class="schedule-time">3:55</div>
+    <div class="schedule-time">4:10</div>
     <div class="schedule-block">
       <div class="block-title">Wrap-up and Q&amp;A</div>
       <div class="block-desc">Open discussion and workshop feedback.</div>
