@@ -21,6 +21,7 @@
           - iperf3
           - hping3
           - tcpdump
+          - iptables
         state: present
         update_cache: true
 

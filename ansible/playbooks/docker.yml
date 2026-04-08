@@ -9,6 +9,13 @@
     docker_user: ubuntu
 
   tasks:
+    - name: Install Docker SDK prerequisites for Ansible
+      ansible.builtin.apt:
+        name:
+          - python3-docker
+        state: present
+        update_cache: true
+
     - name: Check if Docker is already installed
       ansible.builtin.command: docker --version
       register: docker_check

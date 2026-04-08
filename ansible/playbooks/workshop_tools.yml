@@ -26,6 +26,8 @@
           - apt-transport-https
           - software-properties-common
           - lsb-release
+          - openssh-client
+          - procps
         state: present
         update_cache: true
 
@@ -160,7 +162,7 @@
 
     - name: Create a workshop Python venv for participants
       ansible.builtin.command:
-        cmd: "python3 -m venv {{ workshop_user_home }}/workshop-env"
+        cmd: "python3 -m venv --system-site-packages {{ workshop_user_home }}/workshop-env"
         creates: "{{ workshop_user_home }}/workshop-env"
       become_user: "{{ workshop_user }}"
 
