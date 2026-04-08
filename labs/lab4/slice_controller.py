@@ -12,7 +12,7 @@ A transport slice is a contract with two components:
   - Bandwidth contract: OVS HTB queue guarantees a minimum rate on the bottleneck
 
 API:
-    sc = SliceController(net, s1, s2)
+    sc = SliceController(net, ingress=s1, peer=s2)
     sc.provision("premium", src="h1", dst="h2", chain=["mb1"], bw=8)
     sc.teardown("premium")
     sc.status()
@@ -43,11 +43,15 @@ class SliceError(Exception):
 # Add entries here when new hosts are added to the topology.
 
 SID = {
+    # Hosts
     "h1":  "fc00::1",
     "h2":  "fc00::2",
     "h3":  "fc00::3",
+    # Middleboxes
     "mb1": "fc00::b1",
     "mb2": "fc00::b2",
+    # Transit switches (used as SRv6 waypoints for path steering)
+    "s4":  "fc00::a4",
 }
 
 SID_SUBNET = "fc00::/64"
@@ -74,15 +78,28 @@ class SliceController:
         Bottleneck link capacity in Mbps (default 10).
     """
 
-    def __init__(self, net, s1, s2, link_bw=10):
+    def __init__(self, net, ingress, peer, link_bw=10):
+        """
+        Parameters
+        ----------
+        net     : Mininet   The running network object.
+        ingress : OVSSwitch The ingress switch where source hosts connect
+                            and where the bottleneck queue is installed.
+                            (e.g. s1 in: h1/h3 -- s1 -- s2 -- ...)
+        peer    : OVSSwitch The switch on the other end of the bottleneck link.
+                            Used only to identify which port on ingress faces
+                            the bottleneck. (e.g. s2)
+        link_bw : int       Bottleneck link capacity in Mbps (default 10).
+        """
         self.net      = net
-        self.s1       = s1
-        self.s2       = s2
+        self.ingress  = ingress
+        self.peer     = peer
         self.link_bw  = link_bw
         self._slices  = {}          # name → slice state dict
         self._next_queue_id = 1     # queue 0 is best-effort, start at 1
+        self._switches = set()      # populated by configure_srv6
 
-        # Set up base QoS on s1→s2 bottleneck (best-effort queue 0 only)
+        # Set up base QoS on ingress→peer bottleneck (best-effort queue 0 only)
         self._iface, self._bottleneck_ofport = self._init_qos()
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -229,28 +246,46 @@ class SliceController:
 
     # ── SRv6 setup (called once at startup) ──────────────────────────────────
 
-    def configure_srv6(self, *host_names):
+    def configure_srv6(self, *names):
         """
-        Enable SRv6 on the given hosts, assign SIDs, and install static
-        IPv6 neighbour entries so forwarding works without NDP.
+        Enable SRv6 on hosts and/or switches, assign SIDs, and install
+        static IPv6 neighbour entries so forwarding works without NDP.
+
+        Hosts and switches are handled differently:
+          - Hosts: sysctl + SID on eth0 + static neighbours
+          - Switches: sysctl + SID on the switch's loopback-like interface
+            (OVS switch namespaces share the root namespace, so we assign
+             the SID directly on the OVS bridge interface)
 
         Call this once after net.start() before provisioning any slices.
 
         Parameters
         ----------
-        *host_names : str  Host names to configure (e.g. "h1", "h2", "mb1")
+        *names : str  Host or switch names (e.g. "h1", "h2", "mb1", "s4")
         """
         print("\n[SliceController] Configuring SRv6")
 
-        # Build neighbour table for all hosts being configured
-        all_info = {}
-        for name in host_names:
-            host = self.net.get(name)
-            all_info[name] = (SID[name], host.MAC())
+        from mininet.node import OVSSwitch
+        # Discover all switches from the names passed in
+        self._switches = {
+            name for name in names
+            if isinstance(self.net.get(name), OVSSwitch)
+        }
 
-        for name in host_names:
-            host = self.net.get(name)
-            self._configure_srv6_host(host, SID[name], all_info)
+        # Build neighbour table: name → (sid, mac)
+        # For switches, use the bridge MAC (first interface MAC)
+        all_info = {}
+        for name in names:
+            node = self.net.get(name)
+            mac  = node.MAC() if hasattr(node, "MAC") else node.intfList()[0].mac
+            all_info[name] = (SID[name], mac)
+
+        for name in names:
+            node = self.net.get(name)
+            if name in self._switches:
+                self._configure_srv6_switch(node, SID[name], all_info)
+            else:
+                self._configure_srv6_host(node, SID[name], all_info)
 
         # Wait for DAD (Duplicate Address Detection)
         time.sleep(2)
@@ -282,15 +317,15 @@ class SliceController:
         Set up the base HTB QoS on s1→s2 with queue 0 (best-effort only).
         Called once at construction time.
         """
-        iface = self._get_iface_facing(self.s1, "s2")
+        iface = self._get_iface_facing(self.ingress, self.peer.name)
 
         # Clean slate
-        self.s1.cmd(f"ovs-vsctl clear port {iface} qos")
-        self.s1.cmd("ovs-vsctl --all destroy qos   2>/dev/null; true")
-        self.s1.cmd("ovs-vsctl --all destroy queue 2>/dev/null; true")
+        self.ingress.cmd(f"ovs-vsctl clear port {iface} qos")
+        self.ingress.cmd("ovs-vsctl --all destroy qos   2>/dev/null; true")
+        self.ingress.cmd("ovs-vsctl --all destroy queue 2>/dev/null; true")
 
         # Create root QoS with best-effort queue 0 only
-        self.s1.cmd(
+        self.ingress.cmd(
             f'ovs-vsctl set port {iface} qos=@newqos -- '
             f'--id=@newqos create qos type=linux-htb '
             f'other-config:max-rate={self.link_bw * 1_000_000} '
@@ -301,7 +336,7 @@ class SliceController:
             f'other-config:burst=125000'
         )
 
-        ofport = self._get_ofport(self.s1, iface)
+        ofport = self._get_ofport(self.ingress, iface)
         return iface, ofport
 
     # ── Internal: queue management ────────────────────────────────────────────
@@ -309,24 +344,36 @@ class SliceController:
     def _add_queue(self, queue_id, bw_mbps):
         """Add a new HTB queue to the existing QoS on the bottleneck port."""
         bw_bps   = int(bw_mbps * 1_000_000)
-        burst    = 62500   # 62 KB — keeps TCP cwnd in check
-        qos_uuid = self.s1.cmd(
+        burst    = 15000   # 15 KB token bucket burst
+        qos_uuid = self.ingress.cmd(
             f"ovs-vsctl get port {self._iface} qos"
         ).strip()
-        self.s1.cmd(
+        self.ingress.cmd(
             f'ovs-vsctl -- --id=@q create queue '
             f'other-config:min-rate={bw_bps} '
             f'other-config:max-rate={bw_bps} '
             f'other-config:burst={burst} '
             f'-- set qos {qos_uuid} queues:{queue_id}=@q'
         )
+        # Attach a fq_codel leaf qdisc to the HTB class to prevent
+        # backlog buildup. Without this the kernel queues up to ~1000
+        # packets per class regardless of HTB rate, causing TCP to build
+        # huge cwnds and then collapse when the shaper kicks in.
+        # The HTB class handle is 1:(queue_id+1) — OVS maps queue N to
+        # class 1:(N+1). We limit to 50 packets (~70KB at 1500B MTU).
+        htb_class = f"1:{queue_id + 1}"
+        self.ingress.cmd(
+            f"tc qdisc add dev {self._iface} parent {htb_class} "
+            f"handle {queue_id + 1}0: fq_codel limit 50 target 5ms interval 100ms "
+            f"2>/dev/null; true"
+        )
 
     def _add_queue_flow(self, src_host, queue_id):
         """Install ovs-ofctl flow to steer src_host traffic into queue_id."""
-        h1_iface  = self._get_iface_facing(self.s1, src_host.name)
-        h1_ofport = self._get_ofport(self.s1, h1_iface)
-        self.s1.cmd(
-            f'ovs-ofctl add-flow s1 '
+        h1_iface  = self._get_iface_facing(self.ingress, src_host.name)
+        h1_ofport = self._get_ofport(self.ingress, h1_iface)
+        self.ingress.cmd(
+            f'ovs-ofctl add-flow {self.ingress.name} '
             f'priority=100,'
             f'in_port={h1_ofport},'
             f'dl_src={src_host.MAC()},'
@@ -335,20 +382,20 @@ class SliceController:
 
     def _remove_queue_flow(self, src_host):
         """Remove the queue steering flow for src_host."""
-        h1_iface  = self._get_iface_facing(self.s1, src_host.name)
-        h1_ofport = self._get_ofport(self.s1, h1_iface)
-        self.s1.cmd(
-            f"ovs-ofctl del-flows s1 "
+        h1_iface  = self._get_iface_facing(self.ingress, src_host.name)
+        h1_ofport = self._get_ofport(self.ingress, h1_iface)
+        self.ingress.cmd(
+            f"ovs-ofctl del-flows {self.ingress.name} "
             f"priority=100,in_port={h1_ofport},dl_src={src_host.MAC()} "
             f"2>/dev/null; true"
         )
 
     def _remove_queue(self, queue_id):
         """Remove a queue from the QoS config and restore the TC shaper."""
-        qos_uuid = self.s1.cmd(
+        qos_uuid = self.ingress.cmd(
             f"ovs-vsctl get port {self._iface} qos"
         ).strip()
-        self.s1.cmd(
+        self.ingress.cmd(
             f"ovs-vsctl remove qos {qos_uuid} queues {queue_id} 2>/dev/null; true"
         )
         # Restore TC shaper — OVS qos operations can disturb Mininet's TCLink qdiscs
@@ -358,8 +405,8 @@ class SliceController:
         """Re-apply a simple HTB shaper after OVS QoS operations."""
         bw_kbps  = bw_mbps * 1000
         burst_kb = bw_mbps * 2
-        self.s1.cmd(f"tc qdisc del dev {iface} root 2>/dev/null; true")
-        self.s1.cmd(
+        self.ingress.cmd(f"tc qdisc del dev {iface} root 2>/dev/null; true")
+        self.ingress.cmd(
             f"tc qdisc add dev {iface} root handle 1: htb default 10 && "
             f"tc class add dev {iface} parent 1: classid 1:10 htb "
             f"rate {bw_kbps}kbit burst {burst_kb}kb"
@@ -383,6 +430,37 @@ class SliceController:
             )
         print(f"  {host.name}: SID={sid}")
 
+    def _configure_srv6_switch(self, switch, sid, all_info):
+        """
+        Enable SRv6 on an OVS switch acting as a transit SRv6 node.
+
+        OVS switches in Mininet share the root network namespace, so we
+        configure SRv6 on the bridge interface directly. The switch needs:
+          - IPv6 forwarding and seg6 enabled (root namespace)
+          - SID assigned on the bridge interface
+          - On-link route for the SID subnet
+          - Static neighbour entries for all other nodes
+
+        The switch does not encapsulate — it just processes the SRH
+        (decrements segments_left, updates dst) and forwards normally.
+        OVS handles the actual L2 forwarding via its flow table.
+        """
+        # Bridge interface name matches the switch name (e.g. "s4")
+        iface = switch.name
+        switch.cmd("sysctl -w net.ipv6.conf.all.forwarding=1    > /dev/null")
+        switch.cmd("sysctl -w net.ipv6.conf.all.seg6_enabled=1  > /dev/null")
+        switch.cmd(f"sysctl -w net.ipv6.conf.{iface}.seg6_enabled=1 > /dev/null")
+        switch.cmd(f"ip -6 addr add {sid}/128 dev {iface} 2>/dev/null; true")
+        switch.cmd(f"ip -6 route add {SID_SUBNET} dev {iface} 2>/dev/null; true")
+        for other_name, (other_sid, other_mac) in all_info.items():
+            if other_name == switch.name:
+                continue
+            switch.cmd(
+                f"ip -6 neigh replace {other_sid} lladdr {other_mac} "
+                f"dev {iface} 2>/dev/null; true"
+            )
+        print(f"  {switch.name}: SID={sid} (switch/transit)")
+
     def _build_segments(self, chain, dst):
         """Build the SRv6 segment list for a given chain and destination."""
         return [SID[wp] for wp in chain] + [SID[dst]]
@@ -400,6 +478,9 @@ class SliceController:
     # ── Internal: waypoint loggers ────────────────────────────────────────────
 
     def _start_logger(self, waypoint):
+        # Switches are transit-only — no logger
+        if waypoint in self._switches:
+            return
         host = self.net.get(waypoint)
         if waypoint == "mb1":
             self._start_mb1_logger(host)
@@ -407,6 +488,8 @@ class SliceController:
             self._start_mb2_logger(host)
 
     def _stop_logger(self, waypoint):
+        if waypoint in self._switches:
+            return
         host = self.net.get(waypoint)
         host.cmd("pkill -f mb_logger 2>/dev/null; true")
 
