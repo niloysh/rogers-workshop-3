@@ -38,9 +38,15 @@ render_target() {
     lab2)
       render_one "labs/lab2/lab2.md" "lab2"
       ;;
+    lab3)
+      render_one "labs/lab3/lab3.md" "lab3"
+      ;;
+    lab4)
+      render_one "labs/lab4/lab4.md" "lab4"
+      ;;
     *)
       echo "error: unknown target '$1'" >&2
-      echo "usage: scripts/render_slides.sh [lab1] [lab2]" >&2
+      echo "usage: scripts/render_slides.sh [lab1] [lab2] [lab3] [lab4]" >&2
       exit 1
       ;;
   esac
@@ -49,6 +55,8 @@ render_target() {
 if [ "$#" -eq 0 ]; then
   render_target lab1
   render_target lab2
+  render_target lab3
+  render_target lab4
 else
   for target in "$@"; do
     render_target "${target}"

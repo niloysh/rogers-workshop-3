@@ -562,7 +562,7 @@ What you did in Lab 3:
 - Watched the IDS detect a malicious request carried inside the SRv6 tunnel
 - Confirmed that removing the SRv6 route bypasses the chain entirely
 
-**In Lab 4** the `--srv6` flag in `workshop_topology.py` automates exactly what you did manually today. The slice controller combines this with ONOS and OVS queuing to provision complete transport slices.
+In **Lab 4** the SliceController automates exactly what you did manually today, and combines it with OVS bandwidth reservation to provision complete transport slices.
 
 ---
 

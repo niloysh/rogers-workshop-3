@@ -75,7 +75,7 @@ In this third workshop, we turn our attention to the transport network, which in
       <div class="block-title">Concepts 1 — Programmable networking</div>
       <div class="block-desc">Why traditional networks are difficult to change, and how SDN addresses this by separating the control plane from the data plane.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Slides — TBA</a>
+        <a class="materials-link available" href="assets/slides/concepts1.pdf" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Slides</a>
       </div>
     </div>
     <div class="schedule-dur">20 min</div>
@@ -107,7 +107,7 @@ In this third workshop, we turn our attention to the transport network, which in
       <div class="block-title">Concepts 2 — OpenFlow, controllers and intents</div>
       <div class="block-desc">The OpenFlow model behind Lab 1, how an SDN controller automates it, and how intents express network policy at a higher level of abstraction.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Slides — TBA</a>
+        <a class="materials-link available" href="assets/slides/concepts2.pdf" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Slides</a>
       </div>
     </div>
     <div class="schedule-dur">25 min</div>
@@ -139,7 +139,7 @@ In this third workshop, we turn our attention to the transport network, which in
       <div class="block-title">Concepts 3 — Network slicing and SRv6</div>
       <div class="block-desc">How network virtualization enables transport slicing, hard vs soft isolation, and how SRv6 provides path control using standard IPv6 extension headers.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Slides — TBA</a>
+        <a class="materials-link available" href="assets/slides/concepts3.pdf" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Slides</a>
       </div>
     </div>
     <div class="schedule-dur">30 min</div>
@@ -151,7 +151,7 @@ In this third workshop, we turn our attention to the transport network, which in
       <div class="block-title">Lab 3 — SRv6 path programming</div>
       <div class="block-desc">Assign SRv6 segment IDs, program a Segment Routing Header on an ingress host, and steer traffic through a middlebox. Inspect the SRH in transit with tshark.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials — TBA</a>
+        <a class="materials-link available" href="assets/slides/lab3.html" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials</a>
       </div>
     </div>
     <div class="schedule-dur">60 min</div>
@@ -171,7 +171,7 @@ In this third workshop, we turn our attention to the transport network, which in
       <div class="block-title">Lab 4 — Transport slice controller</div>
       <div class="block-desc">Bring everything together. A provided controller combines ONOS, SRv6, and OVS queuing to demonstrate transport slice provisioning — then extend it with your own second slice.</div>
       <div class="block-footer">
-        <a class="materials-link" href="#"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials — TBA</a>
+        <a class="materials-link available" href="assets/slides/lab4.html" target="_blank"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg> Lab materials</a>
       </div>
     </div>
     <div class="schedule-dur">70 min</div>
