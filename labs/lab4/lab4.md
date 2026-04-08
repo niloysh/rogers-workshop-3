@@ -46,7 +46,7 @@ In this lab you will:
 | Lab 3 | SRv6 encap route programming | path steering through an explicit service chain              |
 | Lab 4 | **This lab**                 | combines all three into one slice controller                 |
 
-> **What changes in Lab 4** Instead of configuring each mechanism separately, you describe a slice and the controller realizes it. The plumbing is hidden. The contracts are explicit.
+> **What changes in Lab 4** Instead of configuring each mechanism separately, you describe a slice and the controller realizes it. The plumbing is hidden. 
 
 ---
 
@@ -117,8 +117,6 @@ The guarantees in this lab are **soft**, not hard:
 | Isolation | Statistical — shared buffers | Physical — separate resources  |
 
 You will see occasional retransmit spikes in the iperf logs. This is expected — it is what soft slicing looks like in practice. The path guarantee is hard: traffic always visits the waypoint. The bandwidth guarantee is soft: average rate is protected but TCP dynamics cause transient variance.
-
-> **This is production-realistic.** Most commercial network slicing — including 5G — is soft slicing.
 
 ---
 
@@ -227,7 +225,7 @@ tail -F /tmp/iperf_h1.log       8 Mbps  ->  5 Mbps   no protection
 tail -F /tmp/mb1_bandwidth.log   traffic ->  silent   no path enforcement
 ```
 
-> **The key observation** Provisioning and teardown are atomic — both contracts go together. This is what makes it a slice rather than two separate configurations.
+> **The key observation** Provisioning and teardown are atomic — both contracts (path and bandwidth) go together. This is what makes it a slice rather than two separate configurations.
 
 ---
 
@@ -344,7 +342,7 @@ Your task: provision a slice through **both** mb1 and mb2.
 
 > **Hint** Draw the actual packet path for each chain order on the topology diagram above. Count how many times each switch is visited.
 
----
+<!-- ---
 
 # Exercise 2 — The backtracking problem
 
@@ -360,7 +358,7 @@ Correct order:
 h1->s1->s2->mb1->s2->s3->mb2->s3->h2        (no backtracking)
 ```
 
-> **What this shows** The controller accepted both orders without complaint. It has no topology awareness — it just maps names to SIDs. A production controller needs to know the physical location of each waypoint to build efficient segment lists.
+> **What this shows** The controller accepted both orders without complaint. It has no topology awareness — it just maps names to SIDs. A production controller needs to know the physical location of each waypoint to build efficient segment lists. -->
 
 ---
 
