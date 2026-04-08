@@ -8,7 +8,8 @@ paginate: true
 
 <span class="tag">Lab 4</span>
 
-# Transport Slice Controller
+# Transport Slicing
+# with SRv6 and OVS Queues
 
 Rogers Executive Workshop 3 — Transport Network Programmability
 
@@ -18,7 +19,7 @@ Rogers Executive Workshop 3 — Transport Network Programmability
 
 # Getting Started
 
-Using Labs 1 to 3 together
+What we are building and why it matters
 
 ---
 
@@ -26,613 +27,485 @@ Using Labs 1 to 3 together
 
 In this lab you will:
 
-- start a topology with three transport nodes and three service functions
-- inspect how a slice controller combines ONOS, SRv6, and queueing
-- provision two example slices and compare how they are realized
-- observe how intent changes transport treatment
-- design two final slices from a short customer brief
+- observe contention between two flows on a shared bottleneck
+- provision a transport slice that enforces both a **path contract** and a **bandwidth contract**
+- watch a waypoint logger confirm that SRv6 is steering traffic through the right service functions
+- discover what happens when chain order does not match the physical topology
+- hit the limits of admission control and reason about smarter policies
 
-> **Goal** Use one controller command to realize a simple notion of transport network slicing from service requirements.
+> **What to focus on** A transport slice is not just a rate limit and it is not just a routing rule. It is a combined contract: *this traffic will visit these functions, in this order, at this guaranteed rate.* Neither component alone is sufficient.
 
 ---
 
 # From Labs 1 to 4
 
-| Lab   | What you learned              | What Lab 4 reuses                                  |
-| ----- | ----------------------------- | -------------------------------------------------- |
-| Lab 1 | OVS rules, match + action     | queue-based bandwidth treatment                    |
-| Lab 2 | ONOS REST API, topology view  | topology and attachment discovery from the control plane |
-| Lab 3 | SRv6 encap route programming  | path steering through an explicit service chain    |
+| Lab   | What you learned             | What Lab 4 reuses                                            |
+| ----- | ---------------------------- | ------------------------------------------------------------ |
+| Lab 1 | OVS rules, match and action  | queue-based bandwidth treatment on the bottleneck            |
+| Lab 2 | ONOS REST API, topology view | understanding the control plane — not used directly in Lab 4 |
+| Lab 3 | SRv6 encap route programming | path steering through an explicit service chain              |
+| Lab 4 | **This lab**                 | combines all three into one slice controller                 |
 
-> **What changes in Lab 4** Instead of configuring each mechanism separately, you ask for a slice and let the controller realize it.
-
----
-
-# What a slice request says
-
-In this lab, a slice request has four parts:
-
-- **src / dst** — which endpoints are communicating
-- **chain** — which service functions the traffic must visit
-- **intent** — what transport policy we want
-- **bandwidth** — what rate should be reserved
-
-That is the service-level view of the slice.
+> **What changes in Lab 4** Instead of configuring each mechanism separately, you describe a slice and the controller realizes it. The plumbing is hidden. The contracts are explicit.
 
 ---
 
-# What the controller realizes
+# Lab 4 topology
 
-The controller translates that request into:
-
-- a realized transport path across the ONOS-discovered topology
-- an SRv6 segment list
-- a queue reservation on the ingress side
-- middlebox-specific configuration
-
-> **Key idea** The service request is abstract. The realized path and segment list are concrete.
-
----
-
-# Workshop simplification
-
-For this workshop version, we use one simplifying rule:
-
-> Only one active slice may use a given ordered endpoint pair `src -> dst`.
-
-That means:
-
-- one slice can use `h1 -> h2`
-- another slice can use `h3 -> h2`
-- but two concurrent slices cannot both use `h1 -> h2`
-
-> **Why we do this** It keeps the classifier simple so the lab stays focused on slicing, not flow-classification design.
-
----
-
-# Revised Lab 4 topology
-
-```text
-               mb1
-                |
- h1 ── r1 ───── r2 ── h2
-        \       /
-         \     /
-          \   /
-            r3 ── h3
-           /  \
-         mb2  mb3
+```
+h1 (10.0.0.1) --.
+h3 (10.0.0.3) --+-- s1 --[10 Mbps]-- s2 -- s3 -- h2 (10.0.0.2)
+                                       |     |
+                                      mb1   mb2
+                               (10.0.0.4) (10.0.0.5)
 ```
 
-- `r1`, `r2`, and `r3` are transport nodes discovered by ONOS
-- `h1`, `h2`, and `h3` are workshop endpoints
-- `mb1`, `mb2`, and `mb3` are service functions attached at the edge
+| Node | Role               | IPv4     | SRv6 SID |
+| ---- | ------------------ | -------- | -------- |
+| h1   | Slice source       | 10.0.0.1 | fc00::1  |
+| h2   | Slice destination  | 10.0.0.2 | fc00::2  |
+| h3   | Contending flow    | 10.0.0.3 | fc00::3  |
+| mb1  | Waypoint / monitor | 10.0.0.4 | fc00::b1 |
+| mb2  | Waypoint / logger  | 10.0.0.5 | fc00::b2 |
 
-> **Why this topology matters** The triangle core gives more than one transport path, so the intent field can affect the realization.
-
----
-
-# Available service functions
-
-Use the revised controller:
-
-```bash
-python3 slice_controller_v2.py list-mbs
-```
-
-Expected output:
-
-```text
-  mb1  fc00::b1  throughput monitor
-  mb2  fc00::b2  firewall policy
-  mb3  fc00::b3  flow logger
-```
-
-> **How to think about these** The chain names the service functions. The intent does not choose the services; it chooses how transport is realized between them.
+> **The bottleneck** The s1->s2 link runs at 10 Mbps. All traffic from h1 and h3 competes here.
 
 ---
 
-# What the intents mean
+# What is a transport slice?
 
-In this lab:
+A transport slice is a service-level request with two components that must both be active:
 
-- **`low-latency`** means prefer the shortest realized transport path
-- **`best-effort`** means prefer a longer alternate path when one exists
+**Path contract — enforced by SRv6**
+Traffic is wrapped in an outer IPv6+SRH packet that names each waypoint explicitly. The kernel processes the SRH at each hop, advancing to the next segment. No waypoint can be skipped.
 
-Both intents still use the same overall controller workflow:
+**Bandwidth contract — enforced by OVS HTB queues**
+An HTB queue on the bottleneck port guarantees a minimum rate for the slice's traffic. Best-effort flows get whatever is left.
 
-- discover topology
-- choose a path
-- build an SRv6 segment list
-- apply bandwidth treatment
+> **Why both are needed** A queue without SRv6 protects bandwidth but lets traffic skip service functions. SRv6 without a queue enforces the path but not the rate. A slice needs both.
 
 ---
 
-# Keep these open
-
-Keep four terminals open:
-
-1. **Mininet** — topology, host commands, `pingall`
-2. **ONOS CLI** — inspect devices, links, and flows
-3. **Shell** — run `slice_controller_v2.py`, `preflight_check.py`, `verify_lab4.py`
-4. **Host shells** — open `h1`, `h3`, or middleboxes with `./enter_host.sh`
-
----
-
-# Start the topology
-
-```bash
-sudo python3 lab4_topology.py
-```
-
-When the topology starts, it also:
-
-- configures SRv6 on all hosts and middleboxes
-- starts the middlebox services
-- starts HTTP services on `h2` on ports `80` and `8080`
-- starts UDP receivers on `h2` on ports `5004` and `5005`
-
----
-
-# Bring ONOS online
-
-Connect to the ONOS CLI:
-
-```bash
-ssh -p 8101 -o HostKeyAlgorithms=+ssh-rsa onos@localhost
-# password: rocks
-```
-
-Activate the required apps:
-
-```text
-onos> app activate org.onosproject.openflow
-onos> app activate org.onosproject.fwd
-```
-
----
-
-# Sanity-check the environment
-
-From Mininet:
-
-```text
-mininet> pingall
-```
-
-From ONOS:
-
-```text
-onos> devices
-onos> links
-onos> hosts
-```
-
-From your shell:
-
-```bash
-python3 preflight_check.py
-python3 slice_controller_v2.py list-mbs
-```
-
-> **You should see** Three transport nodes, the discovered hosts, and the three available service functions.
-
----
-
-<!-- _class: divider -->
-
-# Traffic checks
-
-Where the performance evidence comes from
-
----
-
-# h2 already has demo receivers running
-
-`lab4_topology.py` starts two UDP receiver processes on `h2`:
-
-```text
-h2:5004  primary service test
-h2:5005  secondary service test
-```
-
-The receiver prints:
-
-- throughput
-- latency
-- jitter
-- packet loss
-
-If you want to watch the live output directly, use:
-
-```bash
-tail -f /tmp/h2_receiver5004.log
-tail -f /tmp/h2_receiver5005.log
-```
-
-> **Why this matters** The controller tells you what it intended to provision. The receiver output tells you what transport performance was actually delivered.
-
----
-
-# Baseline test — primary flow
-
-Open a shell in `h1`:
-
-```bash
-./enter_host.sh h1
-```
-
-Run a short UDP test to `h2:5004`:
-
-```bash
-python3 sender.py --host 10.0.0.2 --port 5004 --rate 3 --duration 20 --label primary
-```
-
-> **What to observe** Watch the receiver-side throughput, latency, jitter, and loss in `/tmp/h2_receiver5004.log`. This is your baseline measurement for the premium service before any slice is provisioned.
-
----
-
-# Baseline test — competing flow
-
-In another shell, open `h3`:
-
-```bash
-./enter_host.sh h3
-```
-
-Run a second UDP flow to `h2:5005`:
-
-```bash
-python3 sender.py --host 10.0.0.2 --port 5005 --rate 8 --duration 20 --label secondary
-```
-
-> **Why we use `h3` here** It gives us a second source host, which fits the workshop simplification for concurrent slices.
-
----
-
-<!-- _class: divider -->
-
-# The Controller
-
-Read `provision` as a pipeline
-
----
-
-# Read the controller in stages
-
-Open `slice_controller_v2.py` and find these pieces:
-
-- `build_topology_from_onos()` — builds the transport graph from ONOS links
-- `select_path()` — maps intent to a path policy
-- `compute_realized_transport()` — computes a realized path for each service hop
-- `build_srv6_segments()` — turns that realization into an SRv6 segment list
-- `install_ovs_queue()` — reserves bandwidth treatment
-- `install_queue_flow_rule()` — marks the slice traffic into that queue
-- `install_srv6_route()` — installs the SRv6 encap route at the source host
-
-> **This is the Lab 4 story** discovery, policy, realization, then enforcement.
-
----
-
-# The important distinction
+# Service request vs realized slice
 
 These are not the same thing:
 
-**Service chain**
-- `h1 -> mb1 -> h2`
+**What you request**
+```python
+sc.provision("premium", src="h1", dst="h2", chain=["mb1"], bw=8)
+```
+A service-level description: source, destination, waypoints, rate.
 
-**Realized transport path**
-- the actual ONOS-discovered path from `h1` toward `mb1`
-- then from `mb1` toward `h2`
+**What the controller realizes**
+- an SRv6 segment list: `fc00::b1, fc00::2`
+- an OVS HTB queue on s1-eth3: min-rate=8 Mbps, max-rate=8 Mbps
+- an ovs-ofctl flow rule: h1 MAC -> set_queue:1, normal
+- an ip route on h1: `10.0.0.2 encap seg6 mode encap segs ...`
 
-**SRv6 segment list**
-- the explicit sequence of SIDs that enforces that realization
+> **The service request is abstract. The realization is concrete.** The controller translates one into the other.
 
-> **What you are learning here** A slice is not just "visit mb1". It is "visit mb1 via a chosen transport realization."
+---
+
+# Soft slicing
+
+The guarantees in this lab are **soft**, not hard:
+
+|           | Soft (this lab)              | Hard                           |
+| --------- | ---------------------------- | ------------------------------ |
+| Path      | SRv6 always visits waypoints | Dedicated fibre or wavelength  |
+| Bandwidth | HTB guarantees average rate  | Dedicated timeslot or spectrum |
+| Isolation | Statistical — shared buffers | Physical — separate resources  |
+
+You will see occasional retransmit spikes in the iperf logs. This is expected — it is what soft slicing looks like in practice. The path guarantee is hard: traffic always visits the waypoint. The bandwidth guarantee is soft: average rate is protected but TCP dynamics cause transient variance.
+
+> **This is production-realistic.** Most commercial network slicing — including 5G — is soft slicing.
+
+---
+
+# The slice controller
+
+Lab 4 uses a `SliceController` class that abstracts the plumbing:
+
+```python
+sc = SliceController(net, ingress=s1, peer=s2, link_bw=10)
+sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2")
+
+# Provision: installs OVS queue + SRv6 route atomically
+sc.provision("premium", src="h1", dst="h2", chain=["mb1"], bw=8)
+
+# Status: shows reserved and available bandwidth
+sc.status()
+
+# Teardown: removes queue + route atomically
+sc.teardown("premium")
+```
+
+Open `slice_controller.py` and find these key methods:
+
+- `_add_queue()` — reserves bandwidth on the bottleneck
+- `_install_srv6_route()` — programs the SRv6 encap route on the source host
+- `_build_segments()` — turns the chain list into a SRv6 segment list
+- `_check_admission()` — enforces the bandwidth budget
+
+---
+
+<!-- _class: compact -->
+
+# Before you start
+
+For this lab:
+
+- work from `~/labs/lab4`
+- keep four terminals open
+
+| Terminal      | Purpose                                               |
+| ------------- | ----------------------------------------------------- |
+| 1 — Mininet   | Run the demo and exercises                            |
+| 2 — h1 log    | `tail -F /tmp/iperf_h1.log`                           |
+| 3 — h3 log    | `tail -F /tmp/iperf_h3.log`                           |
+| 4 — mb logger | `tail -F /tmp/mb1_bandwidth.log` or `mb2_packets.log` |
+
+Files in `~/labs/lab4`:
+
+```
+slice_controller.py     the controller -- read this to understand the API
+slice_demo.py           interactive demo -- run this first
+exercise1_skeleton.py   your starting point for each exercise
+exercise2_skeleton.py
+exercise3_skeleton.py
+```
 
 ---
 
 <!-- _class: divider -->
 
-# Demo 1
+# The Demo
 
-Premium monitored video
-
----
-
-# Demo slice 1 — premium monitored video
-
-Provision a monitored premium slice:
-
-```bash
-python3 slice_controller_v2.py provision \
-  --name video_gold \
-  --src h1 \
-  --dst h2 \
-  --chain mb1 \
-  --intent low-latency \
-  --bandwidth 5
-```
-
-> **What this asks for** Connect `h1` to `h2`, force traffic through the monitor, prefer the shortest realized path, and reserve 5 Mbps.
+`sudo python3 slice_demo.py`
 
 ---
 
-# What to look for in the output
+# Demo overview
 
-The controller should print:
+The demo walks through four phases. Press ENTER to advance.
 
-- the service request fields
-- the realized transport path per service hop
-- the SRv6 segment list
-- the queue installation
-- the ONOS classifier installation
-- the middlebox configuration
+```
+Phase 1 -- Baseline
+          h1 sends 8 Mbps to h2, direct path.
+          mb1 logger is running but SILENT.
 
-You are looking for evidence that:
+Phase 2 -- Contention
+          h3 joins at 8 Mbps. Both flows share the 10 Mbps bottleneck.
+          h1 drops to ~5 Mbps. mb1 logger still SILENT.
 
-- ONOS discovery was used
-- intent influenced path selection
-- SRv6 encoded the result
+Phase 3 -- Provision slice
+          sc.provision("premium", src="h1", dst="h2", chain=["mb1"], bw=8)
+          h1 recovers to ~8 Mbps. mb1 logger LIGHTS UP.
+
+Phase 4 -- Teardown
+          sc.teardown("premium")
+          h1 drops to ~5 Mbps. mb1 goes SILENT.
+```
+
+> **Watch for** the mb1 logger changing state in phases 3 and 4. That is the SRv6 path contract being enforced and removed.
 
 ---
 
-# Inspect the first slice
+# What the demo proves
 
-Check controller state:
+When the slice is provisioned, two things change simultaneously:
 
-```bash
-python3 slice_controller_v2.py status
+```
+tail -F /tmp/iperf_h1.log       5 Mbps  ->  8 Mbps   bandwidth contract
+tail -F /tmp/mb1_bandwidth.log   silent  ->  traffic  path contract
 ```
 
-Inspect the route on `h1`:
+When the slice is torn down, both revert simultaneously:
 
-```text
-mininet> h1 ip route show
+```
+tail -F /tmp/iperf_h1.log       8 Mbps  ->  5 Mbps   no protection
+tail -F /tmp/mb1_bandwidth.log   traffic ->  silent   no path enforcement
 ```
 
-Inspect ONOS flows:
-
-```text
-onos> flows
-```
-
-Inspect the monitor output:
-
-```bash
-cat /tmp/mb_monitor.json
-```
+> **The key observation** Provisioning and teardown are atomic — both contracts go together. This is what makes it a slice rather than two separate configurations.
 
 ---
 
-# Re-run the primary traffic test
+# Understanding the mb1 logger
 
-From your `h1` shell, run the same UDP test again:
+The mb1 bandwidth logger runs inside mb1's network namespace. It counts bytes with h1's source MAC and reports throughput every second:
 
-```bash
-python3 sender.py --host 10.0.0.2 --port 5004 --rate 3 --duration 20 --label primary
+```
+[mb1] [12:34:01]   0.00 Mbits/sec
+[mb1] [12:34:02]   0.00 Mbits/sec       <- no slice yet
+[mb1] [12:34:03]   7.82 Mbits/sec  <- slice traffic
+[mb1] [12:34:04]   7.91 Mbits/sec  <- slice traffic
 ```
 
-> **What to look for** Compare `/tmp/h2_receiver5004.log` to the earlier baseline. This is the simplest way to tie the slice configuration to observed transport behavior.
+The logger is silent in phases 1 and 2 even though it is running — this is the evidence that traffic bypasses mb1 without SRv6. Silence is not absence of the logger. It is absence of the slice.
 
 ---
 
 <!-- _class: divider -->
 
-# Demo 2
+# Exercise 1
 
-Background logged service on a different endpoint pair
+Provision a slice through a different waypoint
 
 ---
 
-# Demo slice 2 — logged background traffic
+# Exercise 1 — Task
 
-Keep the first slice active.
-
-Now provision a second slice:
-
-```bash
-python3 slice_controller_v2.py provision \
-  --name telemetry_silver \
-  --src h3 \
-  --dst h2 \
-  --chain mb3 \
-  --intent best-effort \
-  --bandwidth 2
+```
+sudo python3 exercise1_skeleton.py
 ```
 
-> **Why this works concurrently** It uses a different ordered endpoint pair, `h3 -> h2`, which fits the workshop simplification.
+The topology has both mb1 and mb2. Both loggers will be running before you provision anything.
+
+Your task: provision a single slice with these requirements:
+- source: h1, destination: h2
+- the slice must visit **mb2** (not mb1)
+- bandwidth guarantee: **6 Mbps**
+
+**What to observe:**
+- Which logger lights up when the slice is provisioned?
+- What happens to the other logger?
+- After teardown, what do both logs show?
+
+> **Hint** Look at how `sc.provision()` is called in `slice_demo.py`. The `chain` parameter is a list of waypoint names.
 
 ---
 
-# Compare the two active slices
+# Exercise 1 — What to think about
 
-Check status again:
+Before you run anything, predict the answers:
 
-```bash
-python3 slice_controller_v2.py status
-```
+1. mb1 is connected to the topology. Will it see traffic? Why or why not?
 
-Compare:
+2. h1 is sending at 8 Mbps but the slice guarantees 6 Mbps. What will the iperf log show?
 
-- endpoint pair
-- intent
-- requested bandwidth
-- realized path
-- segment list
-- logger output
+3. After teardown, h1 and h3 both send at 8 Mbps. How much does each get?
 
-> **What changes** The slices differ in endpoint pair, intent, bandwidth, and service function. Demo 1 is premium and monitored; Demo 2 is ordinary and logged.
+> **The key insight** SRv6 only visits the waypoints you explicitly name in `chain=[]`. Connecting a host to the topology does not put it in any slice's path. The path contract is exact.
 
 ---
 
-# Re-run the secondary traffic test
-
-From your `h3` shell, run the UDP test again:
-
-```bash
-python3 sender.py --host 10.0.0.2 --port 5005 --rate 8 --duration 20 --label secondary
-```
-
-> **What to notice** This slice is best-effort, not premium. The important comparison here is the controller realization, not a guaranteed throughput target.
-
----
-
-# Cleanup before the challenge
-
-When you are done with the demo comparison, remove both example slices:
-
-```bash
-python3 slice_controller_v2.py teardown --name video_gold
-python3 slice_controller_v2.py teardown --name telemetry_silver
-python3 slice_controller_v2.py status
-```
-
-> **Why cleanup matters** It resets the endpoint pairs so you can reuse them in the independent challenge.
-
----
-
-<!-- _class: divider -->
-
-# Independent Challenge
-
-Translate requirements into slices
-
----
-
-# Customer brief
-
-Provision two final slices from this short customer brief.
-
-**Slice 1 — premium monitored video**
-> "We need a premium video service from `h1` to `h2`. It needs guaranteed bandwidth and monitoring evidence that the service is being delivered."
-
-**Slice 2 — secured and logged web access**
-> "We need ordinary web access from `h3` to `h2`. Port `80` must work, port `8080` must not, and we want evidence that this traffic was part of the service chain."
-
----
-
-# Your tasks
-
-1. Choose the right chain for **Slice 1**
-2. Choose the right chain for **Slice 2**
-3. Choose the right intent for each slice
-4. Choose reasonable bandwidth values
-5. Provision both slices with `slice_controller_v2.py provision`
-6. Verify the behavior from controller state, host tests, and middlebox output
-
-> **What we are testing** Whether you can turn service requirements into chain, intent, and bandwidth.
-
----
-
-# Hints
-
-For **Slice 1**, ask yourself:
-
-- which service function provides throughput visibility?
-- does this traffic want premium or ordinary transport treatment?
-
-For **Slice 2**, ask yourself:
-
-- which service function is associated with firewall policy?
-- which service function gives you an audit-style record?
-- which endpoint pair should this slice use?
-
----
-
-# Useful verification commands
-
-Controller state:
-
-```bash
-python3 slice_controller_v2.py status
-```
-
-Performance checks:
-
-```bash
-./enter_host.sh h1
-python3 sender.py --host 10.0.0.2 --port 5004 --rate 3 --duration 20 --label primary
-```
-
-Web checks:
-
-```bash
-./enter_host.sh h3
-curl http://10.0.0.2:80
-curl http://10.0.0.2:8080
-```
-
-Middlebox evidence:
-
-```bash
-cat /tmp/h2_receiver5004.log
-cat /tmp/h2_receiver5005.log
-cat /tmp/mb_monitor.json
-cat /tmp/mb_firewall.json
-cat /tmp/mb_logger.json
-```
-
-Checker:
-
-```bash
-python3 verify_lab4.py
-```
-
----
-
-# What a good answer looks like
+# Exercise 1 — What a good answer looks like
 
 A strong solution will:
 
-- pick a chain that matches the service requirement
-- pick an intent that matches the transport requirement
-- justify the bandwidth choice
-- use different endpoint pairs for the two active slices
-- verify the result with evidence, not just with the provision command output
+- provision the slice with exactly one `sc.provision()` call
+- show mb2 logger showing traffic and mb1 logger staying silent simultaneously
+- explain why mb1 is silent even though it is connected to s2
+- observe that after teardown both loggers go quiet and throughput returns to fair share
 
-> **As in the earlier labs, focus on evidence** Show why the slice is realized the way you intended.
+> **Evidence matters** The iperf log and the mb2 logger together are the proof. The provision command output alone is not enough — it only shows what the controller intended, not what was delivered.
 
 ---
+
+<!-- _class: divider -->
+
+# Exercise 2
+
+Chain ordering and topology awareness
+
+---
+
+# Exercise 2 — Background
+
+```
+sudo python3 exercise2_skeleton.py
+```
+
+The slice controller builds segment lists from whatever chain order you give it. It has no topology awareness — it does not know which switch each waypoint is attached to.
+
+```
+h1 --.
+h3 --+-- s1 --[10Mbps]-- s2 -- s3 -- h2
+                           |     |
+                          mb1   mb2
+```
+
+**mb1 is on s2. mb2 is on s3.** Traffic flows naturally left to right: s1 -> s2 -> s3.
+
+---
+
+# Exercise 2 — Task
+
+Your task: provision a slice through **both** mb1 and mb2.
+
+**Step 1** — provision with `chain=["mb2", "mb1"]` (mb2 first)
+- the built-in `measure_rtt()` helper runs automatically
+- both loggers will show traffic — but is the path efficient?
+
+**Step 2** — teardown and reprovision with `chain=["mb1", "mb2"]` (mb1 first)
+- RTT is measured again automatically
+- the script prints a comparison at the end
+
+> **Hint** Draw the actual packet path for each chain order on the topology diagram above. Count how many times each switch is visited.
+
+---
+
+# Exercise 2 — The backtracking problem
+
+With `chain=["mb2", "mb1"]` the segment list is `fc00::b2, fc00::b1, fc00::2`.
+
+The packet visits mb2 first — but mb2 is on s3, downstream of mb1 on s2. To then visit mb1 the packet must travel backwards:
+
+```
+Wrong order:
+h1->s1->s2->s3->mb2->s2->mb1->s2->s3->h2   (s2 visited 3 times)
+
+Correct order:
+h1->s1->s2->mb1->s2->s3->mb2->s3->h2        (no backtracking)
+```
+
+> **What this shows** The controller accepted both orders without complaint. It has no topology awareness — it just maps names to SIDs. A production controller needs to know the physical location of each waypoint to build efficient segment lists.
+
+---
+
+# Exercise 2 — What a good answer looks like
+
+A strong solution will:
+
+- show the RTT comparison printed at the end of the script
+- draw the packet path for each chain order and count switch visits
+- explain why the controller accepted the wrong order without warning
+- answer: what information would the controller need to detect backtracking?
+
+> **The connection to research** This limitation — topology-blind segment list construction — is one of the problems that motivates smarter slice controllers. A controller with topology awareness can validate chain order before provisioning.
+
+---
+
+<!-- _class: divider -->
+
+# Exercise 3
+
+Admission control
+
+---
+
+# Exercise 3 — Background
+
+```
+sudo python3 exercise3_skeleton.py
+```
+
+The slice controller tracks total reserved bandwidth and rejects new slices that would exceed link capacity.
+
+```python
+class AdmissionError(Exception):
+    """Raised when a slice request exceeds available bandwidth."""
+    pass
+```
+
+This is **first-come-first-served** admission control — the simplest possible policy. It protects committed slices but has no concept of priority, preemption, or demand prediction.
+
+---
+
+# Exercise 3 — Task
+
+**Step 1** — provision a premium slice for h1: `chain=["mb1"]`, 8 Mbps
+
+**Step 2** — try to provision a slice for h3 with more bandwidth than is available:
+```python
+try:
+    sc.provision("standard", src="h3", dst="h2", chain=[], bw=???)
+except AdmissionError as e:
+    print(e)
+```
+Read the error message. What does it tell you about available capacity?
+
+**Step 3** — find a bandwidth value that fits. Provision it and observe both slices running.
+
+> **Hint** `sc.status()` shows reserved and available bandwidth at any point.
+
+---
+
+# Exercise 3 — Reflection
+
+After completing the exercise, think about these questions:
+
+- The link is now fully allocated. What happens to the next request, regardless of priority?
+
+- A high-priority emergency slice arrives. Can it preempt the standard slice? Why not?
+
+- What information would a smarter controller need to make better decisions?
+
+**Further reading**
+
+Our controller makes a binary accept/reject decision with no knowledge of traffic priorities, demand patterns, or future requests. For a multi-agent deep reinforcement learning approach to coordinated slicing and admission control:
+
+> M. Sulaiman, A. Moyyedi, M. Ahmadi, M. A. Salahuddin, R. Boutaba and A. Saleh. *Coordinated Slicing and Admission Control using Multi-Agent Deep Reinforcement Learning.* IEEE Transactions on Network and Service Management, Vol. 20(2), pp. 1110-1124, June 2023.
+
+---
+
+# Exercise 3 — What a good answer looks like
+
+A strong solution will:
+
+- show the `AdmissionError` output and explain what each field means
+- correctly calculate the maximum bandwidth h3 can request (link capacity minus reserved)
+- observe that h3 was already getting roughly that amount as best-effort — and explain what the slice guarantee adds
+- answer the preemption question: first-come-first-served has no mechanism to remove a committed slice
+
+> **The larger point** Admission control is not just about saying no. It is about maintaining commitments to existing slices while fairly allocating remaining capacity. Simple policies fail under dynamic demand — which is why the research cited above matters.
+
+---
+
+<!-- _class: divider -->
 
 # Summary
 
-What you did in the revised Lab 4:
+---
 
-- treated a slice as a service-level request
-- used ONOS discovery to obtain transport topology context
-- used intent to influence the realized transport path
-- used SRv6 to encode that realization as a segment list
-- used queueing to add bandwidth treatment
-- combined all of that into a simple transport-slice controller workflow
+# What you did in Lab 4
 
-**Key idea** A transport slice is not only a service chain. It is a service chain plus a transport realization policy.
+- Observed contention between two TCP flows sharing a 10 Mbps bottleneck
+- Provisioned a transport slice combining SRv6 path enforcement and OVS bandwidth guarantee
+- Confirmed that both contracts are enforced atomically — provisioning and teardown affect both simultaneously
+- Discovered that chain order must match the physical topology, and that a topology-blind controller accepts inefficient orders without warning
+- Triggered an admission control rejection and reasoned about the limits of first-come-first-served policy
+
+**The larger picture**
+
+Labs 3 and 4 together show the full arc: Lab 3 introduced SRv6 path steering manually and showed what encapsulation looks like on the wire. Lab 4 combined path steering with bandwidth reservation, abstracted both into a slice controller, and exposed the limitations that motivate smarter systems.
 
 ---
 
+<!-- _class: compact -->
+
 # Quick reference — Lab 4 commands
 
+```python
+# Slice controller API
+sc = SliceController(net, ingress=s1, peer=s2, link_bw=10)
+sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2")
+sc.provision("name", src="h1", dst="h2", chain=["mb1"], bw=8)
+sc.teardown("name")
+sc.status()
+
+# Admission control
+from slice_controller import AdmissionError
+try:
+    sc.provision(...)
+except AdmissionError as e:
+    print(e)
+```
+
 ```bash
-# Topology
-sudo python3 lab4_topology.py
-python3 preflight_check.py
+# Watch logs
+tail -F /tmp/iperf_h1.log
+tail -F /tmp/iperf_h3.log
+tail -F /tmp/mb1_bandwidth.log
+tail -F /tmp/mb2_packets.log
 
-# Controller
-python3 slice_controller_v2.py list-mbs
-python3 slice_controller_v2.py provision \
-  --name <name> \
-  --src <host> --dst <host> \
-  --chain <mb> [<mb>...] \
-  --intent <low-latency|best-effort> \
-  --bandwidth <Mbps> \
-  [--blocked-ports <port> [<port>...]]
-python3 slice_controller_v2.py status
-python3 slice_controller_v2.py teardown --name <name>
+# Inspect OVS state from Mininet CLI
+mininet> sh ovs-ofctl dump-flows s1
+mininet> sh ovs-vsctl list queue
+mininet> sh tc class show dev s1-eth3
 
-# Host shells
-./enter_host.sh h1
-./enter_host.sh h3
-
-# Verification
-python3 verify_lab4.py
+# Check SRv6 route
+mininet> h1 ip route show
+mininet> h1 ip -6 neigh show
 ```

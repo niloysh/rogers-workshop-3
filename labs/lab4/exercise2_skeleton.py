@@ -1,27 +1,44 @@
 #!/usr/bin/env python3
 """
-Exercise 2 — Extend the Chain to Include mb2
-==============================================
-The premium slice currently chains: h1 → mb1 → h2
-Your task: extend it to:            h1 → mb1 → mb2 → h2
+Exercise 2 - Service Chain Ordering
+=====================================
+Topology:
 
-mb2 is a packet counter — it logs how many packets per second it sees.
-When the extended chain is working you should see both mb1 and mb2 light up.
+    h1 --.
+    h3 --+-- s1 --[10Mbps]-- s2 -- s3 -- h2
+                              |     |
+                             mb1   mb2
 
-What you need to do:
-    1. Add mb2 to the topology          (see build_topology — mb2 is already
-                                         added for you, just needs linking)
-    2. Configure SRv6 on mb2            (add "mb2" to configure_srv6 call)
-    3. Update the slice chain           (add "mb2" to the chain list)
-    4. Watch both loggers light up
+Your task: provision a slice that visits BOTH mb1 and mb2.
 
-    tail -F /tmp/mb1_bandwidth.log    → mb1 sees traffic
-    tail -F /tmp/mb2_packets.log      → mb2 sees traffic   ← new
+The slice controller accepts any chain order you give it -- it has no
+topology awareness. But the physical network does have an order, and
+visiting waypoints in the wrong order forces the packet to backtrack
+through the network.
+
+Tasks:
+  Step 1: Provision with chain=["mb2", "mb1"] (wrong order)
+          - Both loggers will show traffic
+          - Measure the round-trip time with ping
+          - Think about why the RTT is what it is
+
+  Step 2: Teardown and reprovision with chain=["mb1", "mb2"] (correct order)
+          - Measure RTT again
+          - Compare with Step 1
+
+  Step 3: Explain the difference
+          - Draw the actual packet path for each chain order
+          - Which switches does the packet visit and how many times?
+          - Why does the controller not catch this?
 
 Think about:
-    - The segment list will be: fc00::b1, fc00::b2, fc00::2
-      Why must fc00::b1 (mb1) come before fc00::b2 (mb2)?
-    - What would happen if mb2 didn't have a static neighbour entry for fc00::2?
+  - mb1 is on s2, mb2 is on s3. What is the natural forwarding direction?
+  - What does "backtracking" mean in terms of switches visited?
+  - The controller builds segment lists from whatever order you pass in.
+    What information would it need to detect an inefficient chain order?
+
+Usage:
+    sudo python3 exercise2_skeleton.py
 """
 
 import time
@@ -30,6 +47,7 @@ from mininet.node import OVSKernelSwitch
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+
 from slice_controller import SliceController, MB1_LOG, MB2_LOG
 
 H1_PORT = 5201
@@ -37,85 +55,179 @@ H3_PORT = 5202
 
 
 def build_topology(net):
+    info("*** Adding hosts\n")
     h1  = net.addHost("h1",  ip="10.0.0.1/24", mac="00:00:00:00:00:01")
     h2  = net.addHost("h2",  ip="10.0.0.2/24", mac="00:00:00:00:00:02")
     h3  = net.addHost("h3",  ip="10.0.0.3/24", mac="00:00:00:00:00:03")
     mb1 = net.addHost("mb1", ip="10.0.0.4/24", mac="00:00:00:00:00:04")
     mb2 = net.addHost("mb2", ip="10.0.0.5/24", mac="00:00:00:00:00:05")
 
+    info("*** Adding switches\n")
     s1 = net.addSwitch("s1", cls=OVSKernelSwitch, failMode="standalone")
     s2 = net.addSwitch("s2", cls=OVSKernelSwitch, failMode="standalone")
+    s3 = net.addSwitch("s3", cls=OVSKernelSwitch, failMode="standalone")
 
+    info("*** Adding links\n")
     net.addLink(h1,  s1, cls=TCLink, bw=100, delay="1ms")
     net.addLink(h3,  s1, cls=TCLink, bw=100, delay="1ms")
-    net.addLink(h2,  s2, cls=TCLink, bw=100, delay="1ms")
     net.addLink(mb1, s2, cls=TCLink, bw=100, delay="1ms")
+    net.addLink(mb2, s3, cls=TCLink, bw=100, delay="1ms")
+    net.addLink(h2,  s3, cls=TCLink, bw=100, delay="1ms")
+    net.addLink(s1,  s2, cls=TCLink, bw=10,  delay="5ms")
+    net.addLink(s2,  s3, cls=TCLink, bw=100, delay="5ms")
 
-    # ── TODO 1 ────────────────────────────────────────────────────────────────
-    # Connect mb2 to s2.
-    # Hint: same pattern as mb1 above.
-    # net.addLink(???)
-    # ─────────────────────────────────────────────────────────────────────────
+    return h1, h2, h3, mb1, mb2, s1, s2, s3
 
-    net.addLink(s1, s2, cls=TCLink, bw=10, delay="5ms")
-    return h1, h2, h3, mb1, mb2, s1, s2
+
+def measure_rtt(h1, dst_ip, count=5):
+    """Ping dst_ip from h1 and return the avg RTT string."""
+    result = h1.cmd(f"ping -c {count} -q {dst_ip} 2>&1 | tail -1")
+    return result.strip()
 
 
 def main():
     setLogLevel("info")
+
     net = Mininet(controller=None, switch=OVSKernelSwitch,
                   link=TCLink, autoSetMacs=False)
-    h1, h2, h3, mb1, mb2, s1, s2 = build_topology(net)
+    h1, h2, h3, mb1, mb2, s1, s2, s3 = build_topology(net)
+
+    info("*** Starting network\n")
     net.start()
 
     try:
-        sc = SliceController(net, s1, s2, link_bw=10)
+        sc = SliceController(net, ingress=s1, peer=s2, link_bw=10)
+        sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2")
 
-        # ── TODO 2 ────────────────────────────────────────────────────────────
-        # Add "mb2" to the configure_srv6 call so it gets its SID and
-        # static neighbour entries.
-        # Hint: fc00::b2 is already in the SID table in slice_controller.py
-        sc.configure_srv6("h1", "h2", "h3", "mb1")  # ← add "mb2" here
-        # ─────────────────────────────────────────────────────────────────────
-
+        info("*** Testing connectivity\n")
         net.pingAll()
-        sc.verify_srv6("h1", "h2", "mb1")
+        sc.verify_srv6("h1", "h2", "mb1", "mb2")
 
+        # Start iperf3 servers
         h2.cmd("pkill -f iperf3 2>/dev/null; true")
         time.sleep(0.3)
         h2.cmd(f"iperf3 -s -p {H1_PORT} -D --forceflush")
         h2.cmd(f"iperf3 -s -p {H3_PORT} -D --forceflush")
         time.sleep(0.5)
 
-        # ── TODO 3 ────────────────────────────────────────────────────────────
-        # Extend the chain to include mb2.
-        # Current:  chain=["mb1"]
-        # Extended: chain=["mb1", "mb2"]
-        sc.provision("premium", src="h1", dst="h2", chain=["mb1"], bw=8)
-        #                                                   ^^^^ add "mb2"
+        # Start both loggers
+        sc._start_mb1_logger(mb1)
+        sc._start_mb2_logger(mb2)
+
+        # Measure baseline RTT before any slice
+        print("\nMeasuring baseline RTT (no slice, direct path)...")
+        baseline = measure_rtt(h1, h2.IP())
+        print(f"  Baseline RTT: {baseline}\n")
+
+        input("[ Press ENTER ] ▶  Step 1: Provision with WRONG chain order")
+        print()
+
+        # ── TODO 1 ────────────────────────────────────────────────────────────
+        # Provision a slice with chain=["mb2", "mb1"] -- mb2 first, then mb1.
+        # Use 6 Mbps bandwidth.
+        #
+        # Hint: the controller will accept this without complaint.
+        #       It has no idea whether this order makes topological sense.
+        #
+        # sc.provision(???)
         # ─────────────────────────────────────────────────────────────────────
 
         sc.status()
 
-        sc._start_mb1_logger(mb1)
-        sc._start_mb2_logger(mb2)
-
-        h1.cmd(f"iperf3 -c {h2.IP()} -p {H1_PORT} -b 8M -t 120 "
+        # Start traffic
+        h1.cmd(f"iperf3 -c {h2.IP()} -p {H1_PORT} -b 8M -t 600 "
                f"--forceflush -i 1 2>&1 | tee /tmp/iperf_h1.log &")
-        h3.cmd(f"iperf3 -c {h2.IP()} -p {H3_PORT} -b 8M -t 120 "
+        time.sleep(0.5)
+        h3.cmd(f"iperf3 -c {h2.IP()} -p {H3_PORT} -b 8M -t 600 "
                f"--forceflush -i 1 2>&1 | tee /tmp/iperf_h3.log &")
 
+        time.sleep(3)
+        print("\nMeasuring RTT with wrong chain order [mb2, mb1]...")
+        rtt_wrong = measure_rtt(h1, h2.IP())
+        print(f"  RTT (wrong order): {rtt_wrong}")
+
         print(f"""
-Open these in separate terminals:
-    tail -F /tmp/iperf_h1.log     → ~8 Mbps
-    tail -F {MB1_LOG} → mb1 should show traffic
-    tail -F {MB2_LOG} → mb2 should show traffic  ← new
+Both loggers should show traffic -- the packet visits both mb1 and mb2.
+But look at the RTT compared to baseline. Is it what you expected?
+
+    tail -F {MB1_LOG}    -> traffic
+    tail -F {MB2_LOG}  -> traffic
+    tail -F /tmp/iperf_h1.log    -> ?
+
+Think about the actual path the packet takes:
+  chain=["mb2", "mb1"] means segments: fc00::b2, fc00::b1, fc00::2
+  Where is mb2? Where is mb1? Draw the path.
         """)
 
-        input("[ Press ENTER ] ▶  Open Mininet CLI")
+        input("[ Press ENTER ] ▶  Step 2: Teardown and reprovision with CORRECT order")
+        print()
+
+        # Stop traffic and teardown
+        h1.cmd("pkill -f 'iperf3 -c' 2>/dev/null; true")
+        h3.cmd("pkill -f 'iperf3 -c' 2>/dev/null; true")
+        h2.cmd("pkill -f iperf3 2>/dev/null; true")
+        time.sleep(1)
+
+        # ── TODO 2 ────────────────────────────────────────────────────────────
+        # Teardown the wrong-order slice.
+        #
+        # sc.teardown(???)
+        # ─────────────────────────────────────────────────────────────────────
+
+        # ── TODO 3 ────────────────────────────────────────────────────────────
+        # Reprovision with the correct chain order.
+        # Same bandwidth, same name, but fix the chain.
+        #
+        # Hint: mb1 is attached to s2, mb2 is attached to s3.
+        #       Traffic naturally flows s1->s2->s3.
+        #       Which waypoint should come first?
+        #
+        # sc.provision(???)
+        # ─────────────────────────────────────────────────────────────────────
+
+        sc.status()
+
+        # Restart traffic
+        h2.cmd("pkill -f iperf3 2>/dev/null; true")
+        time.sleep(0.3)
+        h2.cmd(f"iperf3 -s -p {H1_PORT} -D --forceflush")
+        h2.cmd(f"iperf3 -s -p {H3_PORT} -D --forceflush")
+        time.sleep(0.5)
+        h1.cmd(f"iperf3 -c {h2.IP()} -p {H1_PORT} -b 8M -t 600 "
+               f"--forceflush -i 1 2>&1 | tee /tmp/iperf_h1.log &")
+        time.sleep(0.5)
+        h3.cmd(f"iperf3 -c {h2.IP()} -p {H3_PORT} -b 8M -t 600 "
+               f"--forceflush -i 1 2>&1 | tee /tmp/iperf_h3.log &")
+
+        time.sleep(3)
+        print("\nMeasuring RTT with correct chain order [mb1, mb2]...")
+        rtt_correct = measure_rtt(h1, h2.IP())
+        print(f"  RTT (correct order): {rtt_correct}")
+
+        print(f"""
+Compare the RTTs:
+  Baseline (no slice):   {baseline}
+  Wrong order [mb2,mb1]: {rtt_wrong}
+  Correct order [mb1,mb2]: {rtt_correct}
+
+    tail -F /tmp/iperf_h1.log    -> ?
+    tail -F {MB1_LOG}    -> traffic
+    tail -F {MB2_LOG}  -> traffic
+
+Reflection:
+  - What is the actual packet path for each chain order?
+    Wrong:   h1 -> s1 -> s2 -> s3 -> mb2 -> s2 -> mb1 -> s2 -> s3 -> h2
+    Correct: h1 -> s1 -> s2 -> mb1 -> s2 -> s3 -> mb2 -> s3 -> h2
+  - How many times does each switch appear in each path?
+  - The controller accepted both -- what would it need to know to
+    detect and reject or warn about an inefficient chain order?
+        """)
+
+        input("[ Press ENTER ] ▶  Open Mininet CLI (type 'exit' to finish)")
         CLI(net)
 
     finally:
+        info("\n*** Cleaning up\n")
         for h in [h1, h2, h3, mb1, mb2]:
             h.cmd("pkill -f iperf3    2>/dev/null; true")
             h.cmd("pkill -f mb_logger 2>/dev/null; true")
