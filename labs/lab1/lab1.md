@@ -94,21 +94,13 @@ Mininet emulates a network topology on a single machine — hosts, switches, and
 
 # Start Mininet
 
-Start the default topology:
-
-```bash
-sudo mn
-```
+Start the default topology: `sudo mn`
 
 <div class="topology-figure compact">
   <img src="../../assets/figures/mininet-default-topology.svg" alt="Default topology started by sudo mn with hosts h1 and h2 connected through switch s1." />
 </div>
 
-Mininet creates two hosts (`h1`, `h2`) and one switch (`s1`) connected in a line, then drops you into the CLI:
-
-```text
-mininet>
-```
+Mininet creates two hosts (`h1`, `h2`) and one switch (`s1`) connected in a line, then drops you into the CLI: `mininet>`
 
 > **Note** Mininet also starts a default controller — this is what makes `s1` forward traffic before you install any rules.
 
@@ -149,22 +141,6 @@ mininet> py h1.IP()         # inspect Mininet objects from the CLI
 
 ---
 
-# Built-in Mininet topologies
-
-Mininet can start larger topologies without writing any Python:
-
-```bash
-sudo mn --topo=single        # one switch, multiple hosts
-sudo mn --topo=linear,3      # three switches in a line, each with one host
-sudo mn --topo=tree,depth=2,fanout=2   # binary tree: 2 core, 4 edge switches
-```
-
-Try `pingall` after each one — notice how the default controller handles a more complex topology.
-
-> **Coming up** After exploring the built-ins, you will define your own topology in Python and have full control over how it is wired.
-
----
-
 <!-- _class: divider -->
 
 # OpenFlow and OVS
@@ -192,111 +168,19 @@ Every flow rule has three parts:
 
 ---
 
-# Example flow-table entry
+# A concrete flow-table entry
 
-<div class="slide-figure">
-  <img src="../../assets/figures/openflow-flow-table-entry.png" alt="Annotated example of an OpenFlow flow-table entry." />
-</div>
-
-- **priority** — when multiple rules match, the highest priority wins
-- **match fields** — only packets that satisfy all fields are selected
-- **actions** — executed in order; a rule with no actions drops the packet
-
-> **This is what you are writing** when you run `ovs-ofctl add-flow` in the exercises.
-
----
-
-# OVS command reference
-
-This is your controller. Run these from your second terminal:
-
-```bash
-# understand the switch before touching it
-sudo ovs-ofctl -O OpenFlow13 show s1         # port numbers and capabilities
-sudo ovs-ofctl -O OpenFlow13 dump-flows s1   # current rules — match, action, counters
-sudo ovs-ofctl -O OpenFlow13 dump-ports s1   # per-port traffic statistics
-
-# install and remove rules
-sudo ovs-ofctl -O OpenFlow13 add-flow s1 <spec>   # push a rule to the switch
-sudo ovs-ofctl -O OpenFlow13 del-flows s1         # clear all rules
-```
-
-> **`dump-flows` is your best friend** — use it to verify that a rule fired and the counter incremented, which is the goal for every exercise today.
-
----
-
-# Observe switches with no rules
-
-Restart Mininet with a two-switch topology and no controller:
-
-```bash
-sudo mn -c
-sudo mn --topo=linear,2 --controller=none --switch ovs,protocols=OpenFlow13
-```
-
-Try to ping:
-
-```
-mininet> h1 ping -c 3 h2     # fails
-mininet> pingall              # all fail
-```
-
-Inspect the empty flow tables:
-
-```bash
-sudo ovs-ofctl -O OpenFlow13 dump-flows s1
-sudo ovs-ofctl -O OpenFlow13 dump-flows s2
-```
-
-> **What you should observe** Without flow rules, switches drop all traffic. No rule means no forwarding.
-
----
-
-# Add flow rules manually
-
-Install bidirectional rules to connect `h1` and `h2` across `s1 → s2`:
-
-```bash
-# s1: forward h1→h2 traffic toward s2, return traffic back to h1
-sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
-  ip,nw_src=10.0.0.1,nw_dst=10.0.0.2,actions=output:2
-sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
-  ip,nw_src=10.0.0.2,nw_dst=10.0.0.1,actions=output:1
-
-# s2: mirror rules — traffic must be forwarded on both switches
-sudo ovs-ofctl -O OpenFlow13 add-flow s2 \
-  ip,nw_src=10.0.0.1,nw_dst=10.0.0.2,actions=output:2
-sudo ovs-ofctl -O OpenFlow13 add-flow s2 \
-  ip,nw_src=10.0.0.2,nw_dst=10.0.0.1,actions=output:1
-```
-
-> **Check port numbers first** Run `net` in the Mininet CLI to see how nodes are wired, then confirm with `show s1` and `show s2` before applying the rules.
-
----
-
-# Test connectivity and inspect counters
-
-From the Mininet CLI, verify the path works:
+Here is what a flow rule looks like in OVS:
 
 ```text
-mininet> h1 ping -c 5 h2
-mininet> iperf h1 h2
+idle_timeout=0, ip, nw_src=10.0.0.1, nw_dst=10.0.0.2, actions=output:2
 ```
 
-Then check that your rules fired — from your second terminal:
+- **match** — `ip,nw_src=10.0.0.1,nw_dst=10.0.0.2` selects packets from h1 to h2
+- **action** — `actions=output:2` forwards them out port 2
+- **`idle_timeout=0`** — rule never expires; without it OVS silently removes idle rules after ~10 s
 
-```bash
-sudo ovs-ofctl -O OpenFlow13 dump-flows s1
-```
-
-You should see `n_packets` and `n_bytes` incrementing:
-
-```text
-cookie=0x0, duration=12.3s, n_packets=5, n_bytes=490,
-  ip,nw_src=10.0.0.1,nw_dst=10.0.0.2 actions=output:2
-```
-
-> **If `n_packets` is 0** the rule didn't match — double-check the IP addresses and port numbers against `net` and `show`.
+> Always include `idle_timeout=0` in every rule you install — you will see this in practice shortly.
 
 ---
 
@@ -308,98 +192,169 @@ Building topologies in code
 
 ---
 
-# A minimal topology in Python
+# A simple topology in Python
 
-Create `simple_topo.py`:
+Make sure you are in `~/labs/lab1/`, then open `simple_topo.py` — two hosts connected to one switch:
 
 ```python
-from mininet.net import Mininet
-from mininet.node import OVSSwitch
-from mininet.link import TCLink
-from mininet.cli import CLI
-
-net = Mininet()
-
-h1 = net.addHost('h1', ip='10.0.0.1/24')
-h2 = net.addHost('h2', ip='10.0.0.2/24')
-s1 = net.addSwitch('s1', cls=OVSSwitch, protocols='OpenFlow13')
-
-net.addLink(h1, s1, cls=TCLink, bw=10, delay='5ms')  # 10 Mbps, 5ms RTT
-net.addLink(h2, s1, cls=TCLink, bw=10, delay='5ms')
-
-net.start()
-net.staticArp()  # pre-populate ARP so IP rules are enough — no ARP flooding needed
-CLI(net)
-net.stop()
+h1 = net.addHost("h1", ip="10.0.0.1/24")
+h2 = net.addHost("h2", ip="10.0.0.2/24")
+s1 = net.addSwitch("s1", cls=OVSSwitch, protocols="OpenFlow13")
+# links: h1 → s1, h2 → s1 — 10 Mbps, 5 ms delay
+net.staticArp()
 ```
 
-<!-- > **`TCLink`** lets you set bandwidth and delay per link — useful for simulating realistic network conditions. -->
+**`staticArp()`** fills in each host's ARP table in advance — the switch never sees ARP broadcasts, so IP rules alone are enough to forward traffic.
 
 ---
 
-# Run it and add flow rules
+# Start and observe
 
-Start the topology — `pingall` will fail until you install rules:
+From terminal 1 (inside `~/labs/lab1/`), start the topology:
 
 ```bash
 sudo python3 simple_topo.py
 ```
 
-From your second terminal, check ports then add rules:
+From the Mininet CLI — connectivity fails because there are no rules yet:
+
+```text
+mininet> pingall     # all fail
+```
+
+From **terminal 2**, inspect the empty flow table:
 
 ```bash
-sudo ovs-ofctl -O OpenFlow13 show s1
-sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
-  ip,nw_src=10.0.0.1,nw_dst=10.0.0.2,actions=output:2
-sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
-  ip,nw_src=10.0.0.2,nw_dst=10.0.0.1,actions=output:1
+sudo ovs-ofctl -O OpenFlow13 dump-flows s1
 ```
+
+The output is empty — no rules, no forwarding.
+
+---
+
+# Add flow rules
+
+> All `ovs-ofctl` commands run in **terminal 2** — never from inside the Mininet CLI.
+
+Check which host is on which port, then install two rules:
+
+```text
+mininet> net
+```
+
+```bash
+sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
+  "idle_timeout=0,ip,nw_src=10.0.0.1,nw_dst=10.0.0.2,actions=output:2"
+sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
+  "idle_timeout=0,ip,nw_src=10.0.0.2,nw_dst=10.0.0.1,actions=output:1"
+```
+
+From the Mininet CLI, verify:
 
 ```text
 mininet> h1 ping -c 3 h2    # now works
 ```
 
-> **Use this structure** Every topology follows the same pattern: add nodes -> add links -> `start()` -> interact -> `stop()`.
+---
+
+# Verify and reset
+
+In terminal 2, confirm the rules fired:
+
+```bash
+sudo ovs-ofctl -O OpenFlow13 dump-flows s1
+```
+
+```text
+cookie=0x0, duration=8.1s, n_packets=3, n_bytes=294,
+  idle_timeout=0, ip,nw_src=10.0.0.1,nw_dst=10.0.0.2 actions=output:2
+```
+
+`n_packets=3` confirms the rule matched. To clear all rules and try again:
+
+```bash
+sudo ovs-ofctl -O OpenFlow13 del-flows s1
+```
+
+---
+
+<!-- _class: divider -->
+
+# Exercises
+
+Programming flow rules
 
 ---
 
 <!-- _class: independent -->
 
-# Independent Challenge
+# Exercise 1
 
-Build the topology below and implement the required connectivity:
+The topology is already built — no Python edits needed:
 
-<div class="topology-figure compact">
-  <img src="../../assets/figures/lab1-challenge-topology.svg" alt="Challenge topology with host h1 attached to s1, host h2 attached to s2, host h3 attached to s4, and switches s1, s2, s3, and s4 forming two possible branches." />
-</div>
+```
+h1 (10.0.0.1) ── port 1 ──┐
+h2 (10.0.0.2) ── port 2 ──┤ s1
+h3 (10.0.0.3) ── port 3 ──┘
+```
 
-All links: **10 Mbps, 5 ms delay**
+Your goal: make **h1 ↔ h2** work by adding exactly **two flow rules**.  
+h3 is connected but not used yet. Confirm port numbers with `net` in the Mininet CLI.
 
-- `h1` ↔ `h2` must communicate
-- `h1` ↔ `h3` must communicate
+---
+
+<!-- _class: independent -->
+
+# Exercise 1 — Tasks
+
+0. **If Mininet is still running, exit it first** (`Ctrl+D` or `exit`), then clean up: `sudo mn -c`
+1. **Start topology** (terminal 1): `sudo python3 exercises/topology.py`
+2. **Check ports** (Mininet CLI): `net`
+3. **Fill in the two `TODO` rules** in `exercises/part1/add_rules.sh`, then run: `sudo bash exercises/part1/add_rules.sh`
+4. **Verify:** `sudo python3 exercises/part1/verify.py`
+
+> **Stuck?** Compare with `solutions/part1/add_rules.sh`
+
+---
+
+<!-- _class: independent -->
+
+# Take a moment
+
+Before moving on to Exercise 2:
+
+- does `h1 ping -c 3 h2` succeed from the Mininet CLI?
+- does `dump-flows s1` show `n_packets` > 0 on both your rules?
+- compare your solution with `solutions/part1/add_rules.sh`
+
+---
+
+<!-- _class: independent -->
+
+# Exercise 2
+
+Same topology. Extend your rules so:
+
+- `h1` ↔ `h3` also works
 - `h2` and `h3` **cannot** reach each other
 
+The h1 ↔ h2 rules from Exercise 1 are already pre-filled as a reference.  
+Add two more rules for h1 ↔ h3.
+
 ---
 
 <!-- _class: independent -->
 
-# Your tasks
+# Exercise 2 — Tasks
 
-1. **Complete the topology** in `topology_starter.py`, then start it:
-  ```bash
-  sudo python3 topology_starter.py
-  ```
-2. **Add flow rules** in `install_rules.sh`, then apply them from your second terminal:
-  ```bash
-  sudo bash install_rules.sh
-  ```
-3. **Verify** your work:
-  ```bash
-  sudo python3 verify_challenge.py
-  ```
-4. **Explain** in a comment: which missing rule prevents `h2` ↔ `h3`?
+Keep the topology running from Exercise 1 — no restart needed.
 
-> **Stuck?** Compare with `solutions/topology_solution.py` and `solutions/install_rules_solution.sh`
+1. **Open** `exercises/part2/add_rules.sh` — h1 ↔ h2 rules are pre-filled as reference
+2. **Fill in the two `TODO` rules** for h1 ↔ h3, then run: `sudo bash exercises/part2/add_rules.sh`
+3. **Add a comment** in the script: why can't h2 reach h3?
+4. **Verify:** `sudo python3 exercises/part2/verify.py`
+
+> **Stuck?** Compare with `solutions/part2/add_rules.sh`
 
 ---
 
@@ -409,10 +364,10 @@ All links: **10 Mbps, 5 ms delay**
 
 | Symptom | Fix |
 |---|---|
-| `h3 is missing a host link` | topology TODOs are still incomplete |
-| `version negotiation failed` | add `-O OpenFlow13` to your command |
-| ping fails after adding rules | run `dump-flows` — check `n_packets` on each switch along the path |
+| `version negotiation failed` | add `-O OpenFlow13` to your `ovs-ofctl` command |
+| ping fails after adding rules | run `dump-flows s1` — check that `n_packets` is non-zero |
 | rules keep disappearing | add `idle_timeout=0` to your `add-flow` commands |
+| h2 ↔ h3 still works | check you are matching specific `nw_src` and `nw_dst` in every rule |
 
 ---
 
@@ -420,27 +375,10 @@ All links: **10 Mbps, 5 ms delay**
 
 # Hints
 
-- **Port numbers** — run `net` in the Mininet CLI, then `ovs-ofctl show <switch>` to confirm
-- **Multi-link switches** — use `in_port` to avoid ambiguity: `ip,in_port=1,nw_src=...,actions=output:2`
-- **`h2` ↔ `h3` isolation** — no explicit `drop` rule needed; unmatched packets are dropped automatically
-- **One valid path plan** — `s1 → s2` for `h1 ↔ h2`, and `s1 → s3 → s4` for `h1 ↔ h3`
-
----
-
-<!-- _class: independent -->
-
-# Stretch challenge
-
-After your main solution works, reroute `h1 ↔ h3` over the alternate branch.
-
-- make `h1 ↔ h3` work via `s1 → s3 → s4`
-- then reroute it via `s1 → s2 → s4`
-- keep `h1 ↔ h2` working throughout
-- use `dump-flows` counters to confirm which switches are carrying the traffic
-
-> **The forwarding rules change; the connectivity does not** — this is path engineering in miniature.
-
-Reference: `solutions/install_rules_stretch.sh`
+- **Port numbers** — run `net` in the Mininet CLI to see which host connects to which port
+- **Directional rules** — use `in_port` along with `nw_src` and `nw_dst` to be precise about direction
+- **Isolation** — no `drop` rule is needed; OVS drops any packet that does not match a rule
+- **Checking counters** — after each ping, `dump-flows s1` should show `n_packets` incrementing
 
 ---
 
