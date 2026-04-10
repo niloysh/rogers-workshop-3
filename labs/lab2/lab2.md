@@ -11,7 +11,7 @@ paginate: true
 # Controller-Based Connectivity
 # with ONOS
 
-Rogers Executive Workshop 3 — Transport Network Programmability
+Rogers Executive Workshop 3 — Transport Network
 
 ---
 
@@ -33,7 +33,7 @@ In this lab you will:
 - install host intents and observe automatic flow-rule installation
 - watch ONOS reroute traffic after a link failure
 
-> **What to focus on** In Lab 1 you were the control plane. In Lab 2, ONOS takes over and reacts to the network for you.
+> **What to focus on** In Lab 1, you were the control plane. In Lab 2, ONOS is — watch how it discovers the network, installs rules, and recovers from failure without you touching a switch.
 
 ---
 
@@ -50,20 +50,22 @@ Today ONOS does that work automatically:
 | Link failure  | Traffic stops  | ONOS reroutes      |
 | Control plane | You            | ONOS               |
 
-> **Keep this contrast in mind** In this lab, you ask for connectivity and observe how ONOS turns that into switch behavior.
+> **Your job changes** — instead of writing rules, you declare intent ("h1 and h2 should talk") and let the controller figure out the how.
 
 ---
 
 # Where ONOS Fits
+
+ONOS (Open Network Operating System) is an open-source SDN controller built for carrier-grade networks.
 
 <div class="slide-figure">
   <img src="../../assets/figures/onos-overview.png" alt="Overview of ONOS showing applications, controller services, and southbound control of network devices." />
 </div>
 
 - ONOS sits between applications and the network devices
-- applications express policy through ONOS APIs
-- ONOS discovers topology and programs switches through OpenFlow
-- intents let you describe *what* you want without specifying every rule yourself
+- applications express policy through ONOS APIs — no per-switch configuration needed
+- ONOS discovers topology automatically and programs switches via OpenFlow
+- **intents** let you declare *what* you want connected; ONOS works out *how*
 
 ---
 
@@ -73,11 +75,12 @@ Today ONOS does that work automatically:
   <img src="../../assets/figures/triangle-topology.svg" alt="Triangle topology with hosts h1, h2, h3, and switches s1, s2, s3." />
 </div>
 
-- `s1`, `s2`, and `s3` form a triangle
-- `h1`, `h2`, and `h3` connect at the edge
-- for this lab, focus on `h1`, `h2`, and the alternate path through `s3`
+- `s1`, `s2`, `s3` form a triangle — unlike Lab 1's linear topology, this has a loop
+- loops cause broadcast storms in traditional networks, so STP blocks redundant ports to break them
+- ONOS runs apps such as **reactive forwarding** (`fwd`) that install unicast rules on a computed path — unselected links carry no traffic
+- when a link fails, ONOS recomputes and pushes new rules on the surviving path
 
-> **What matters here** This topology lets you observe ONOS discovery, automatic forwarding, and rerouting after a link failure.
+> **STP avoids loops by disabling links. ONOS avoids them by controlling exactly which path each flow takes.**
 
 ---
 
@@ -85,19 +88,18 @@ Today ONOS does that work automatically:
 
 # Before you start
 
-For this lab:
+You will need four terminals for this lab:
+
+| Terminal | Purpose                                                |
+| -------- | ------------------------------------------------------ |
+| 1        | Mininet CLI                                            |
+| 2        | ONOS CLI                                               |
+| 3        | Lab scripts (`preflight_check.py`, `lab2_skeleton.py`) |
+| 4        | `curl`, `ovs-ofctl`, checker                           |
 
 - work from `~/labs/lab2`
-- keep at least four terminals open
-- make sure Docker and Mininet commands run with `sudo` where needed
-- use `Ctrl+D` or `exit` to leave the Mininet CLI cleanly
-
-You will use:
-
-- one terminal for Mininet
-- one terminal for the ONOS CLI
-- one regular shell for lab scripts such as `preflight_check.py` and `lab2_skeleton.py`
-- one regular shell for the checker, `curl`, and `ovs-ofctl`
+- `sudo` is required for Mininet and Docker commands
+- exit the Mininet CLI with `exit` or `Ctrl+D` to tear down the topology cleanly
 
 ---
 
@@ -111,21 +113,19 @@ Make sure the ONOS container is running:
 docker ps | grep onos
 ```
 
-If ONOS is stopped, start it:
+If it is stopped, start it:
 
 ```bash
 docker start onos
 ```
 
-If `docker start onos` fails because the container does not exist, ask the instructor to rerun the ONOS setup playbook. The workshop image normally creates the container with ports `6653`, `8101`, and `8181` already published.
-
-Then wait about 30 seconds and test the REST API:
+Wait ~30 seconds, then confirm the REST API is responding:
 
 ```bash
 curl -u onos:rocks http://localhost:8181/onos/v1/devices
 ```
 
-> **You should see** A JSON response. An empty device list is fine at this point.
+> **An empty device list is fine** — switches connect after you start Mininet. If the container does not exist at all, ask the instructor.
 
 ---
 
@@ -137,19 +137,13 @@ Start Mininet connected to ONOS:
 sudo python3 triangle_topology.py --onos
 ```
 
-You should land in the Mininet CLI:
-
-```text
-mininet>
-```
-
-> **What `--onos` does** It connects each OVS switch to ONOS as a remote OpenFlow controller on port `6653`.
-
-For the first part of the lab, pay attention to:
+The `--onos` flag connects each OVS switch to ONOS as a remote OpenFlow controller on port `6653`. Once Mininet starts, watch for:
 
 - which switches and links ONOS discovers
-- when hosts appear in ONOS
-- what changes after you activate forwarding
+- when hosts appear — they only show up after their first packet
+- what changes after you activate a forwarding app
+
+> **Nothing forwards yet** — ONOS has discovered the topology but has not installed any rules. You will do that in the next step.
 
 ---
 
@@ -157,20 +151,20 @@ For the first part of the lab, pay attention to:
 
 # Connect to the ONOS CLI
 
-In a second terminal, connect to the ONOS Karaf CLI:
+From terminal 2, connect to the ONOS Karaf CLI:
 
 ```bash
 ssh -p 8101 -o HostKeyAlgorithms=+ssh-rsa onos@localhost
 # password: rocks
 ```
 
-List the active applications:
+List active applications to confirm ONOS is ready:
 
 ```text
 onos> apps -a -s
 ```
 
-> **You will use the CLI for** app activation, topology inspection, and intent inspection.
+> **The Karaf CLI is your window into ONOS** — you will use it to activate apps, inspect topology, and query intents throughout this lab.
 
 ---
 
@@ -178,22 +172,22 @@ onos> apps -a -s
 
 # Activate the required apps
 
-Turn on the ONOS apps needed for the first part of this lab:
+Activate the OpenFlow southbound and reactive forwarding apps:
 
 ```text
 onos> app activate org.onosproject.openflow
 onos> app activate org.onosproject.fwd
 ```
 
-Then confirm the switches are visible:
+Confirm the switches have connected:
 
 ```text
 onos> devices
 ```
 
-> **You should see** Three devices, each in the `ACTIVE` state. If the list is empty, wait a few seconds and try again.
+You should see three devices in the `ACTIVE` state. If the list is empty, wait a few seconds and retry.
 
-> **Why activate `fwd` now** It makes the first discovery and connectivity checks work cleanly. You will turn it off before the intent demo.
+> **Note** You will deactivate `fwd` before the intent exercises — reactive forwarding and intents conflict with each other.
 
 ---
 
@@ -201,29 +195,24 @@ onos> devices
 
 # Explore topology from the ONOS CLI
 
-Start with these CLI commands:
+Run these commands and note what is — and is not — populated yet:
 
 ```text
-onos> devices
-onos> ports
-onos> links
-onos> hosts
-onos> flows
+onos> devices   # switches connected via OpenFlow
+onos> ports     # ports on each switch
+onos> links     # inter-switch links ONOS has discovered
+onos> hosts     # end hosts — likely empty at this point
+onos> flows     # rules installed by ONOS on the switches
 ```
 
-At this point `hosts` may still be empty. Now trigger host discovery from Mininet:
+Trigger host discovery from Mininet, then check hosts again:
 
 ```text
 mininet> pingall
-```
-
-Then check hosts again:
-
-```text
 onos> hosts
 ```
 
-> **What this shows** ONOS learns switches and links first, then learns hosts after traffic appears.
+> **ONOS learns switches and links first** — hosts only appear after their first packet, because ONOS sees the ARP or IP traffic and records the source.
 
 ---
 
@@ -231,62 +220,54 @@ onos> hosts
 
 # Inspect reactive forwarding
 
-With `fwd` active, test connectivity from Mininet:
+With `fwd` active, ONOS reacts to each new flow by computing a path and pushing rules to the switches — you never touched `ovs-ofctl`. Test it:
 
 ```text
 mininet> h1 ping -c 3 h2
 mininet> pingall
 ```
 
-Check what ONOS installed:
+Check what ONOS installed on the switches:
 
 ```text
 onos> flows
 ```
 
-Run this in your regular shell, not inside `mininet>` or `onos>`:
+You can also verify directly on the switch from terminal 4:
 
 ```bash
 sudo ovs-ofctl -O OpenFlow13 dump-flows s1
 ```
 
-> **What you should observe** Connectivity works even though you never typed `ovs-ofctl add-flow` yourself.
+> **Compare with Lab 1** — the same rules are there, but ONOS wrote them, not you.
 
 ---
 
 # Intents: what, not how
 
-ONOS supports **intents**: high-level connectivity requests.
+Reactive forwarding still requires ONOS to see a packet before it installs a rule. **Intents** go further — you declare the desired connectivity upfront and ONOS handles everything.
 
-Instead of saying:
-
+Instead of:
 > install these exact flow rules on these exact switches
 
 you say:
-
 > connect host A to host B
 
-ONOS then:
-
-- computes a path
-- installs flow rules automatically
-- recomputes if the topology changes
+ONOS then computes a path, installs the rules, and recomputes automatically if the topology changes.
 
 ---
 
 # Turn off reactive forwarding
 
-Before testing intents, turn off the earlier reactive-forwarding app:
+Before testing intents, deactivate `fwd` — the two approaches conflict:
 
 ```text
 onos> app deactivate org.onosproject.fwd
 ```
 
-Keep the same Mininet topology running.
+Keep the same Mininet topology running — do not restart it. Host discovery and the traffic context from the earlier steps carry over into the intent demo.
 
-> **Do not restart Mininet here** Restarting resets the host-side state and can make the intent demo look broken even when the intent rules are installed correctly.
-
-> **Why this helps** You stop adding new `fwd` rules, but keep the host discovery and traffic context from the earlier steps.
+> **Connectivity will break briefly** until you install an intent in the next step. That is expected.
 
 ---
 
@@ -294,28 +275,26 @@ Keep the same Mininet topology running.
 
 # Install a host intent
 
-First confirm ONOS still knows the hosts:
+Confirm ONOS still knows the hosts from the earlier discovery step:
 
 ```text
 onos> hosts
 ```
 
-Then install a host-to-host intent:
+Install a bidirectional host intent — replace the IDs with what `hosts` returned:
 
 ```text
 onos> add-host-intent <h1-id> <h2-id>
 onos> intents -i
 ```
 
-Verify connectivity:
+Verify ONOS has programmed the switches and traffic flows:
 
 ```text
 mininet> h1 ping -c 3 h2
 ```
 
-> **Important** Install the host intent in the same Mininet session you used for the forwarding demo.
-
-> **What this shows** The intent expresses the desired connectivity, and ONOS handles the switch programming.
+> **Notice** You did not specify a path or write a single flow rule — ONOS translated the intent into switch programming automatically.
 
 ---
 
@@ -325,30 +304,32 @@ mininet> h1 ping -c 3 h2
   <img src="../../assets/figures/triangle-intent-reroute.svg" alt="Triangle topology with the direct s1 to s2 link failed and traffic rerouted through s3 while the intent remains installed." />
 </div>
 
-- the host intent still says "connect `h1` to `h2`"
-- when the direct `s1-s2` link fails, ONOS recomputes the path
-- traffic continues over `s1 -> s3 -> s2` without changing the intent itself
+In the next steps you will take down the `s1–s2` link while the host intent is active. Watch what ONOS does:
 
-> **What changes** The path and flow rules change. The intent does not.
+- does the intent change?
+- does the path change?
+- does connectivity survive?
+
+> **The diagram shows what you are about to observe** — keep it in mind as you work through the failure and recovery steps.
 
 ---
 
 # Path before failure
 
-With the host intent already working between `h1` and `h2`, confirm the current path:
+With the intent working, confirm which path ONOS is currently using:
 
 ```text
 mininet> h1 ping -c 3 h2
 onos> paths of:0000000000000001 of:0000000000000002
 ```
 
-Expected path:
+You should see the direct one-hop path:
 
 ```text
 of:0000000000000001/2-of:0000000000000002/2; cost=1.0
 ```
 
-> **What this shows** The intent is using the direct `s1 -> s2` path before any failure.
+> **Take note of this path** — after you bring the link down in the next step, you will watch ONOS replace it.
 
 ---
 
@@ -413,20 +394,26 @@ sudo ovs-ofctl -O OpenFlow13 dump-flows s3
 
 # List and remove intents
 
-List the installed intents:
+List all installed intents and note the `appId` and `id` from the output:
 
 ```text
 onos> intents -i
 ```
 
-Use the `appId` and `id` from that output to remove one:
+Remove the intent using those values:
 
 ```text
 onos> remove-intent org.onosproject.cli 0x0
-onos> intents -i
 ```
 
-> **What to check** After removal, the host intent should disappear from the installed list.
+Confirm it is gone and check what happened to the flow rules:
+
+```text
+onos> intents -i
+onos> flows
+```
+
+> **When an intent is removed, ONOS withdraws the rules it installed** — the switch goes back to dropping that traffic.
 
 ---
 
@@ -471,7 +458,7 @@ Useful endpoints:
 
 # Add a flow rule with `curl`
 
-Use the example template in `flow_rule_template.json`, then POST it to a device:
+POST the example template to a switch:
 
 ```bash
 curl -u onos:rocks -X POST \
@@ -480,19 +467,17 @@ curl -u onos:rocks -X POST \
   -d @flow_rule_template.json
 ```
 
-To verify the rule was added, check ONOS and OVS:
+Verify the rule was installed:
 
 ```text
 onos> flows
 ```
 
-Run this in your regular shell:
-
 ```bash
 sudo ovs-ofctl -O OpenFlow13 dump-flows s1
 ```
 
-> **What to look for** You should see a new flow entry on `s1` that matches the fields from `flow_rule_template.json`.
+> **This is the same operation your Lab 2 app will perform** — the difference is that your app will build the rule body dynamically rather than loading a fixed template.
 
 ---
 
@@ -524,9 +509,9 @@ curl -u onos:rocks -X DELETE \
 
 <!-- _class: compact -->
 
-# Query devices from Python
+# Query topology from Python
 
-Use the example script `query_topology.py`:
+The lab includes example scripts that call the same endpoints you tested with `curl`:
 
 ```python
 import requests
@@ -534,70 +519,22 @@ import requests
 BASE = 'http://localhost:8181/onos/v1'
 AUTH = ('onos', 'rocks')
 
-r = requests.get(f'{BASE}/devices', auth=AUTH)
-devices = r.json()['devices']
-
+devices = requests.get(f'{BASE}/devices', auth=AUTH).json()['devices']
 for d in devices:
     print(d['id'], d['type'], d['available'])
-```
-
-Run it:
-
-```bash
-python3 query_topology.py
-```
-
-> **You should see** Three device IDs, each with `available` set to `True`.
-
----
-
-<!-- _class: compact -->
-
-# Query links and hosts
-
-The lab folder also includes `query_hosts.py`:
-
-```python
-import requests
-
-BASE = 'http://localhost:8181/onos/v1'
-AUTH = ('onos', 'rocks')
-
-links = requests.get(f'{BASE}/links', auth=AUTH).json()['links']
-print(f"{len(links)} links")
 
 hosts = requests.get(f'{BASE}/hosts', auth=AUTH).json()['hosts']
 for h in hosts:
     print(h['id'], h['ipAddresses'], h['locations'][0]['elementId'])
 ```
 
-> **Before running this** Use `pingall` once so ONOS has discovered all hosts.
-
-> **What you should see** The host entries should include IP addresses, not just MAC addresses and locations.
-
----
-
-# Add the same flow rule from Python
-
-The lab folder also includes `add_flow_rule.py`:
-
-```text
-python3 add_flow_rule.py
-```
-
-Then verify the rule the same way:
-
-```text
-onos> flows
-```
-
-Run this in your regular shell:
+Run `pingall` first so ONOS has discovered all hosts, then:
 
 ```bash
-sudo ovs-ofctl -O OpenFlow13 dump-flows s1
+python3 query_topology.py
 ```
 
-> **Why this matters** Your Lab 2 app will use the same REST operation, but it will build the rule dynamically instead of loading a fixed template.
+> **The REST API returns the same data as the ONOS CLI** — `devices`, `links`, `hosts`, and `flows` are all queryable this way from any language.
 
 ---
 
@@ -629,18 +566,14 @@ In this challenge, you will write a small ONOS-facing Python app that:
 
 # Keep These Open
 
-During the independent challenge, keep these terminals open:
+Keep all four terminals running during the challenge:
 
-1. Mininet
-   Use this for `pingall`, `link s1 s2 down`, and manual ping checks.
-2. ONOS CLI
-   Use this for `links`, `hosts`, `flows`, and `paths`.
-3. Your app
-   Run `python3 lab2_skeleton.py 10.0.0.1 10.0.0.2` here.
-4. Checker / shell tools
-   Run `python3 preflight_check.py`, `sudo python3 verify_lab2.py ...`, `curl`, and `ovs-ofctl` here.
-
-> **Why this helps** You can keep the network, controller, app, and checks visible at the same time.
+| Terminal     | Use during challenge                                        |
+| ------------ | ----------------------------------------------------------- |
+| 1 — Mininet  | `pingall`, `link s1 s2 down`, manual pings                  |
+| 2 — ONOS CLI | `links`, `hosts`, `flows`, `paths`                          |
+| 3 — Your app | `python3 lab2_skeleton.py 10.0.0.1 10.0.0.2`                |
+| 4 — Shell    | `preflight_check.py`, `verify_lab2.py`, `curl`, `ovs-ofctl` |
 
 ---
 
@@ -648,14 +581,14 @@ During the independent challenge, keep these terminals open:
 
 # Files You Will Use
 
-Use these files for the challenge:
-
-- `preflight_check.py` confirms ONOS is ready for the challenge
-- `query_topology.py`, `query_hosts.py`, and `inspect_path.py` are example helpers
-- `lab2_skeleton.py` is your starter application
-- `verify_lab2.py` checks the challenge behavior
-- `flow_rule_template.json` shows the JSON shape for a flow rule
-- `solutions/lab2_solution.py` is the reference solution
+| File                                   | Purpose                                  |
+| -------------------------------------- | ---------------------------------------- |
+| `preflight_check.py`                   | confirm ONOS is ready before you start   |
+| `lab2_skeleton.py`                     | your starter app — complete the TODOs    |
+| `verify_lab2.py`                       | checker — run after your app is working  |
+| `flow_rule_template.json`              | JSON shape for a flow rule POST          |
+| `query_topology.py`, `inspect_path.py` | example helpers for host and path lookup |
+| `solutions/lab2_solution.py`           | reference solution                       |
 
 ---
 
@@ -686,17 +619,17 @@ If it fails:
 
 <!-- _class: independent compact -->
 
-# How To Think About It
+# How to think about it
 
-Break the challenge into five milestones:
+Your app works in five steps:
 
-1. Find the two hosts in ONOS.
-2. Ask ONOS for the current path between them.
-3. Install flow rules on the switches along that path.
-4. Detect when a link on that path fails.
-5. Remove the old rules and install new ones for the new path.
+1. **Find** the two hosts in ONOS by IP
+2. **Query** the current path between their attachment switches
+3. **Install** flow rules on each switch along that path
+4. **Detect** when a link on that path fails
+5. **Reroute** — remove the old rules and install new ones for the new path
 
-> **How we will approach it** The next two slides walk through milestones 1 and 2 together. Then your own code will handle milestones 3, 4, and 5.
+The next two slides walk through steps 1 and 2. Steps 3–5 are your TODOs in `lab2_skeleton.py`.
 
 ---
 
@@ -762,68 +695,28 @@ for link in paths[0]['links']:
 
 <!-- _class: independent compact -->
 
-# What Your App Adds
+# Your tasks
 
-Your app starts with the same two steps, then adds:
+1. **Start the topology** if it is not already running:
+  ```bash
+  sudo python3 triangle_topology.py --onos
+  ```
+2. **Run the preflight check** to confirm ONOS sees the topology:
+  ```bash
+  python3 preflight_check.py
+  ```
+3. **Complete the TODOs** in `lab2_skeleton.py`
+4. **Run your app:**
+  ```bash
+  python3 lab2_skeleton.py 10.0.0.1 10.0.0.2
+  ```
+5. **Verify** with Mininet, ONOS, and your app all running:
+  ```bash
+  sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
+  ```
+6. **Trigger a failure** with `link s1 s2 down` and confirm your app reroutes
 
-- install flow rules on each switch along the path
-- watch for a failed link
-- recompute the path
-- replace the old rules with new ones
-
-> **Mental model** First read the path. Then act on the path.
-
----
-
-<!-- _class: independent compact -->
-
-# Do It In This Order
-
-Work through the challenge in this order:
-
-1. **Use the walkthrough slides and example scripts** to make sure you understand host lookup and path lookup.
-2. **Complete the TODOs** in `lab2_skeleton.py`.
-3. **Run your app** in a separate terminal:
-```text
-python3 lab2_skeleton.py 10.0.0.1 10.0.0.2
-```
-4. **Run the checker** in another terminal:
-```text
-sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
-```
-   Keep Mininet, ONOS, and your app running while the checker runs.
-5. **Trigger a failure** with `link s1 s2 down` and confirm your app reroutes traffic.
-
-If you get stuck, compare your work with:
-`solutions/lab2_solution.py`
-
----
-
-<!-- _class: independent compact -->
-
-# Check your work
-
-Keep Mininet, ONOS, and your Lab 2 app running while you verify.
-
-Run:
-
-```text
-sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
-```
-
-The checker looks for:
-
-- ONOS is reachable
-- topology and hosts are discovered
-- your app installed flow rules
-- the path can reroute after a link failure
-
-To check the reference solution instead:
-
-```text
-python3 solutions/lab2_solution.py 10.0.0.1 10.0.0.2
-sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
-```
+> **Stuck?** Compare with `solutions/lab2_solution.py`
 
 ---
 
@@ -831,13 +724,14 @@ sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
 
 # Troubleshooting
 
-- if `hosts` is empty in ONOS, run `pingall` in Mininet first
-- if ONOS shows hosts but `ip(s)=[]`, run `pingall` again and then recheck `hosts`
-- if `devices` is empty, confirm ONOS is running and `openflow` is active
-- if `paths ...` is empty, focus on `links` and `ports` before debugging your Python app
-- if your app prints "host not found", ONOS has not learned that host yet
-- if rerouting does not happen, check whether the failed port shows `isEnabled: false`
-- if needed, compare your code with `solutions/lab2_solution.py`
+| Symptom                      | Fix                                                    |
+| ---------------------------- | ------------------------------------------------------ |
+| `hosts` is empty             | run `pingall` in Mininet first                         |
+| hosts visible but `ip(s)=[]` | run `pingall` again, then recheck `hosts`              |
+| `devices` is empty           | confirm ONOS is running and `openflow` is active       |
+| `paths` returns empty        | check `links` and `ports` before debugging your app    |
+| app prints "host not found"  | ONOS has not learned that host yet — run `pingall`     |
+| rerouting does not happen    | check whether the failed port shows `isEnabled: false` |
 
 ---
 
@@ -845,27 +739,22 @@ sudo python3 verify_lab2.py 10.0.0.1 10.0.0.2
 
 # Hints
 
-> **To find hosts by IP** Query `/hosts` and look inside each host's `ipAddresses` list.
-
-> **To compute a path** First find the host attachment devices from `/hosts`, then query `/paths/<srcDevice>/<dstDevice>`.
-
-> **To install a rule** POST to `/flows/<deviceId>` using the JSON shape in `flow_rule_template.json`.
-
-> **To clean up old rules** Query `/flows/<deviceId>`, keep only rules with your `appId`, then DELETE them one by one.
-
-> **To detect a failure** Poll `/devices/<deviceId>/ports` and watch for a path port whose `isEnabled` field becomes `false`.
+- **Find hosts by IP** — query `/hosts` and check each host's `ipAddresses` list
+- **Compute a path** — find attachment devices from `/hosts`, then query `/paths/<src>/<dst>`
+- **Install a rule** — POST to `/flows/<deviceId>` using the shape in `flow_rule_template.json`
+- **Clean up old rules** — query `/flows/<deviceId>`, keep rules with your `appId`, DELETE them one by one
+- **Detect a failure** — poll `/devices/<deviceId>/ports` and watch for a path port where `isEnabled` becomes `false`
 
 ---
 
 # Summary
 
-What you did in Lab 2:
+In this lab you:
 
-- connected Mininet to ONOS and observed topology discovery
-- explored the network from the ONOS CLI and REST API
-- used intents to request connectivity at a higher level
-- watched ONOS install flow rules automatically
-- observed rerouting after a link failure
-- built a small controller-side application through the ONOS REST API
+- connected Mininet to ONOS and observed automatic topology discovery
+- explored the network from both the ONOS CLI and the REST API
+- used intents to request connectivity without writing flow rules
+- watched ONOS reroute traffic after a link failure
+- built a small controller app that installs and replaces rules through the REST API
 
-**Next in the schedule** is Concepts 3, where the workshop shifts from centralized control to path steering with SRv6. After that, Lab 3 uses SRv6 headers to steer traffic through the network without relying on ONOS to make every forwarding decision.
+> **Coming up** Lab 3 moves from centralized control to path steering with SRv6 — instead of a controller deciding the path, the ingress node encodes it directly in the packet header.
