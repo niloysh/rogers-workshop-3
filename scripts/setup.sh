@@ -25,6 +25,78 @@ die() {
   exit 1
 }
 
+APT_INSTALL_OPTS=(
+  -y
+  -o Dpkg::Options::=--force-confdef
+  -o Dpkg::Options::=--force-confold
+  -o Acquire::Retries=3
+)
+
+apt_update() {
+  ${SUDO} apt-get update -o Acquire::Retries=3
+}
+
+apt_install() {
+  local log_file status retry_status
+  log_file="$(mktemp)"
+
+  set +e
+  ${SUDO} apt-get install "${APT_INSTALL_OPTS[@]}" "$@" 2>&1 | tee "${log_file}"
+  status=${PIPESTATUS[0]}
+  set -e
+
+  if [[ "${status}" -eq 0 ]]; then
+    rm -f "${log_file}"
+    return 0
+  fi
+
+  if grep -Eq '404  Not Found|Unable to fetch some archives|Failed to fetch' "${log_file}"; then
+    warn "apt returned missing archives; refreshing package metadata and retrying once"
+    ${SUDO} apt-get clean
+    ${SUDO} rm -rf /var/lib/apt/lists/*
+    apt_update
+    set +e
+    ${SUDO} apt-get install "${APT_INSTALL_OPTS[@]}" --fix-missing "$@"
+    retry_status=$?
+    set -e
+    rm -f "${log_file}"
+    return "${retry_status}"
+  fi
+
+  rm -f "${log_file}"
+  return "${status}"
+}
+
+install_docker_from_ubuntu() {
+  apt_install docker.io
+}
+
+install_docker_from_official_repo() {
+  local arch
+  arch="$(dpkg --print-architecture)"
+
+  log "Installing Docker from the official Docker repository"
+  ${SUDO} install -m 0755 -d /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    ${SUDO} gpg --batch --yes --dearmor -o /etc/apt/keyrings/docker.gpg
+  ${SUDO} chmod a+r /etc/apt/keyrings/docker.gpg
+  echo \
+    "deb [arch=${arch} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" | \
+    ${SUDO} tee /etc/apt/sources.list.d/docker.list >/dev/null
+
+  apt_update
+  apt_install containerd.io docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin
+}
+
+install_docker_packages() {
+  if install_docker_from_ubuntu; then
+    return 0
+  fi
+
+  warn "Ubuntu mirror could not provide docker.io after a refresh; falling back to Docker's official repository"
+  install_docker_from_official_repo
+}
+
 pip_install() {
   local pip_args=()
   if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
@@ -127,18 +199,14 @@ echo "iperf3 iperf3/start_daemon boolean false" | ${SUDO} debconf-set-selections
 echo "iperf3 iperf3/public boolean false" | ${SUDO} debconf-set-selections
 
 log "Updating apt metadata"
-${SUDO} apt-get update
+apt_update
 
 log "Installing base system packages"
-${SUDO} apt-get install -y \
-  -o Dpkg::Options::=--force-confdef \
-  -o Dpkg::Options::=--force-confold \
+apt_install \
   apt-transport-https \
   build-essential \
   ca-certificates \
-  containerd \
   curl \
-  docker.io \
   git \
   gnupg \
   hping3 \
@@ -171,13 +239,13 @@ ${SUDO} apt-get install -y \
   vim \
   wget
 
+log "Installing Docker packages"
+install_docker_packages
+
 # termshark is helpful but not guaranteed to exist in every Ubuntu repo.
 if apt-cache show termshark >/dev/null 2>&1; then
   log "Installing optional termshark"
-  ${SUDO} apt-get install -y \
-    -o Dpkg::Options::=--force-confdef \
-    -o Dpkg::Options::=--force-confold \
-    termshark
+  apt_install termshark
 else
   warn "termshark package not found in apt repositories; skipping"
 fi
