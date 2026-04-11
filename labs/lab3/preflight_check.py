@@ -4,7 +4,7 @@ preflight_check.py — Lab 3
 ──────────────────────────
 Checks that the base topology is ready for the SRv6 exercises.
 
-Run this after starting lab3_topology.py and before configuring SRv6.
+Run this after starting topology.py and before configuring SRv6.
 
 Usage:
     python3 preflight_check.py
@@ -46,7 +46,7 @@ rc1, out1, _ = run_cmd("pgrep -x mn")
 rc2, out2, _ = run_cmd("pgrep -f 'mininet:h1|mininet:h2|mininet:mb1|mininet:mb2'")
 mininet_running = (rc1 == 0) or (rc2 == 0)
 check("Mininet process is running", mininet_running,
-      "Start the topology first: sudo python3 lab3_topology.py")
+      "Start the topology first: sudo python3 topology.py")
 
 # ── Check OVS switches ─────────────────────────────────────────────────────────
 print("\n[2] OVS switches")
@@ -60,9 +60,9 @@ print("\n[3] Switch mode")
 rc1, out1, _ = run_cmd("sudo ovs-vsctl get-fail-mode s1")
 rc2, out2, _ = run_cmd("sudo ovs-vsctl get-fail-mode s2")
 check("s1 is in standalone mode", 'standalone' in out1,
-      "Restart lab3_topology.py — Lab 3 does not use ONOS or a default controller")
+      "Restart topology.py — Lab 3 does not use ONOS or a default controller")
 check("s2 is in standalone mode", 'standalone' in out2,
-      "Restart lab3_topology.py — Lab 3 does not use ONOS or a default controller")
+      "Restart topology.py — Lab 3 does not use ONOS or a default controller")
 
 # ── Check kernel SRv6 support ──────────────────────────────────────────────────
 print("\n[4] Kernel SRv6 support")

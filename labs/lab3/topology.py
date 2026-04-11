@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-lab3_topology.py
+topology.py
 ────────────────
 Lab 3 topology — SRv6 Service Function Chaining.
 
@@ -37,7 +37,7 @@ Why this topology?
       - malicious requests are detected even though they still reach h2
 
 Usage:
-    sudo python3 lab3_topology.py
+    sudo python3 topology.py
 
 Note:
     SRv6 is NOT configured at startup.

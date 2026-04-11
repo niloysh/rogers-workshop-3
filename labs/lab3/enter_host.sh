@@ -20,7 +20,7 @@ pid="$(pgrep -f "mininet:${host}" | head -1 || true)"
 
 if [[ -z "${pid}" ]]; then
   echo "error: could not find Mininet host namespace for ${host}" >&2
-  echo "start lab3_topology.py first, then rerun this command" >&2
+  echo "start topology.py first, then rerun this command" >&2
   exit 1
 fi
 

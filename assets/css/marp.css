@@ -156,7 +156,8 @@ code {
 }
 
 p code,
-li code {
+li > code,
+li :not(pre) > code {
     background: #e4e2da;
     color: #1a1917;
     padding: 1px 6px;

@@ -323,7 +323,8 @@ pre .hljs {
 }
 
 p code,
-li code,
+li > code,
+li :not(pre) > code,
 td code,
 th code {
     background: var(--color-inline-code-bg);

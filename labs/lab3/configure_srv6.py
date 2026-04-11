@@ -6,7 +6,7 @@ Apply the repeated SRv6 host setup for Lab 3.
 
 Run this from a regular shell after starting the Lab 3 topology:
 
-    sudo python3 lab3_topology.py
+    sudo python3 topology.py
     python3 configure_srv6.py
 
 This script:
@@ -50,7 +50,7 @@ def host_cmd(host: str, cmd: str) -> subprocess.CompletedProcess[str]:
     if not pid:
         raise RuntimeError(
             f"Could not find Mininet host namespace for {host}. "
-            "Start lab3_topology.py first."
+            "Start topology.py first."
         )
 
     return subprocess.run(

@@ -28,10 +28,9 @@ The topology and what we are trying to show
 In this lab you will:
 
 - start a topology with two service waypoints off the direct path
-- manually enable SRv6 on each host and assign Segment IDs
+- enable SRv6 on each host and assign Segment IDs
 - show that normal routing bypasses both service functions
 - program an SRv6 encapsulation route to chain traffic through them
-- inspect the outer SRv6 packet in transit using tshark
 - observe the IDS log tunneled HTTP requests at the second waypoint
 
 > **Goal** Understand how SRv6 steers traffic through an explicit sequence of nodes — without a controller touching the switches.
@@ -77,12 +76,12 @@ Two service nodes sit off the direct path — traffic only visits them if SRv6 s
 
 # Before you start
 
-| Terminal           | Purpose                                                   |
-| ------------------ | --------------------------------------------------------- |
-| 1 — Mininet        | start topology, run host commands                         |
-| 2 — h2 HTTP server | `./run_h2_http_server.sh`                                 |
-| 3 — mb2 IDS        | `./run_mb2_ids.sh`                                        |
-| 4 — Shell          | `preflight_check.py`, `verify_lab3.py`, `./enter_host.sh` |
+| Terminal           | Purpose                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| 1 — Mininet        | start topology, run host commands                              |
+| 2 — h2 HTTP server | `./run_h2_http_server.sh`                                      |
+| 3 — mb2 IDS        | `./run_mb2_ids.sh`                                             |
+| 4 — Shell          | `preflight_check.py`, `exercises/verify.py`, `./enter_host.sh` |
 
 - work from `~/labs/lab3`
 - `sudo` is required for Mininet
@@ -96,48 +95,33 @@ Two service nodes sit off the direct path — traffic only visits them if SRv6 s
 
 <!-- _class: compact -->
 
-# Start the topology
+# Start and verify
+
+Start the topology (terminal 1):
 
 ```bash
-sudo python3 lab3_topology.py
+sudo python3 topology.py
 ```
 
-Lab 3 uses standalone OVS switches with no controller — SRv6 steering is programmed directly on the hosts using Linux routing, so ONOS is not needed. The switches just forward based on the IPv6 destination in the outer header.
+Lab 3 uses standalone OVS switches with no controller — SRv6 steering is programmed directly on the hosts using Linux routing, so ONOS is not needed.
 
-Verify connectivity:
+Verify connectivity, then start the HTTP server:
 
 ```text
-mininet> nodes
 mininet> pingall
 ```
-
-Start the HTTP server on `h2` from the `h2 HTTP terminal`:
 
 ```bash
 ./run_h2_http_server.sh
 ```
 
-> **At this point** `pingall` succeeds, `h2` is serving HTTP on port 80, and `mb1`/`mb2` are connected but running no service functions yet.
-
----
-
-<!-- _class: compact -->
-
-# Check readiness
-
-From terminal 4, run the preflight check:
+Run the preflight check (terminal 4):
 
 ```bash
 python3 preflight_check.py
 ```
 
-It confirms:
-
-- Mininet is running and `s1`, `s2` exist
-- the base topology is reachable
-- required tools (`tshark`) are available
-
-> **If the check fails** make sure `pingall` has succeeded and the topology is still running before investigating further.
+> **If the preflight check fails** make sure `pingall` has succeeded and the topology is still running before investigating further.
 
 ---
 
@@ -149,20 +133,20 @@ Enable IPv6 SIDs first, then compare before and after steering
 
 ---
 
-# Do it once by hand on h1
+# How `configure_srv6.py` works
 
-These three commands show the full SRv6 setup pattern on one host:
+The script runs these three steps on every host (you don't need to type them):
 
 ```text
-mininet> h1 sysctl -w net.ipv6.conf.all.forwarding=1
-mininet> h1 sysctl -w net.ipv6.conf.all.seg6_enabled=1
-mininet> h1 sysctl -w net.ipv6.conf.h1-eth0.seg6_enabled=1
-mininet> h1 ip -6 addr add fc00::1/128 dev h1-eth0
+sysctl -w net.ipv6.conf.all.forwarding=1
+sysctl -w net.ipv6.conf.all.seg6_enabled=1
+sysctl -w net.ipv6.conf.<iface>.seg6_enabled=1
+ip -6 addr add <SID>/128 dev <iface>
 ```
 
 - `forwarding=1` — allows the host to forward IPv6 packets, not just originate them
 - `seg6_enabled=1` — tells the Linux kernel to process Segment Routing Headers (SRH)
-- `fc00::1/128` — assigns `h1`'s Segment ID; this is the address the segment list will reference
+- `<SID>/128` — assigns the host's Segment ID; this is the address the segment list will reference
 
 > **Every host in the chain needs the same three steps** — the SID address is the only thing that changes.
 
@@ -301,17 +285,6 @@ Payload
 
 ---
 
-# Inline Vs Encap
-
-| Mode     | Think of it as                                           | Best fit                                                      |
-| -------- | -------------------------------------------------------- | ------------------------------------------------------------- |
-| `inline` | add the SRH to the same IPv6 packet                      | simple native IPv6 steering                                   |
-| `encap`  | wrap the original traffic in a new outer IPv6+SRH packet | slice transport, tunnel-like steering, non-IPv6 inner traffic |
-
-> **Why this lab uses `encap`** The original traffic stays intact inside the outer wrapper — this is how SRv6 is typically deployed for slice transport and service chaining in carrier networks.
-
----
-
 # Program the service chain
 
 On `h1`, install the SRv6 encap route that steers traffic through `mb1` then `mb2`:
@@ -410,56 +383,45 @@ mininet> h1 curl http://10.0.0.2/malware
 
 <!-- _class: divider -->
 
-# Independent Challenge
+# Exercises
+
+Adding the reverse service chain
 
 ---
 
 <!-- _class: independent compact -->
 
-# What you will build
+# Exercise
 
 The guided section established the forward chain:
 
 **h1 → mb1 → mb2 → h2**
 
-Your challenge is to add the reverse:
+Your goal is to add the reverse:
 
 **h2 → mb2 → mb1 → h1**
 
-Right now `h2` sends replies directly back to `h1`, bypassing the service chain entirely. You will install an SRv6 route on `h2` so that return traffic also passes through `mb2` and `mb1`.
-
-> **The service chain itself does not change** — you are only adding the return path so steering works in both directions.
+Right now `h2` sends replies directly back to `h1`, bypassing the service chain entirely. Install an SRv6 route on `h2` so that return traffic also passes through `mb2` and `mb1`.
 
 ---
 
 <!-- _class: independent compact -->
 
-# Files you will use
+# Exercise — Tasks
 
-Use these files for the challenge:
+1. **Fill in the two blanks** in `exercises/reverse_route.sh`, then run:
 
-- `lab3_skeleton.py` prints the reverse-chain task and route shape
-- `verify_lab3.py` checks the reverse route and service-chain behavior
-- `lab3_solution.py` is the reference solution
-- `enter_host.sh` opens a shell in any host namespace
-- `run_h2_http_server.sh` and `run_mb2_ids.sh` start the long-running services
+   ```bash
+   sudo bash exercises/reverse_route.sh
+   ```
 
----
+2. **Verify:**
 
-<!-- _class: independent compact -->
+   ```bash
+   sudo python3 exercises/verify.py
+   ```
 
-# Your tasks
-
-1. **Install the reverse SRv6 route on `h2`** — destination `10.0.0.1`, waypoints `mb2 → mb1 → h1`
-2. **Capture on `mb1`** — open `./enter_host.sh mb1` and run a `tshark` filter that matches both ping requests and replies
-3. **Run a ping from `h1`** — before the reverse route, `mb1` sees only requests; after, it sees both
-4. **Verify** with Mininet, HTTP server, and IDS all running:
-  ```bash
-  sudo python3 verify_lab3.py
-  ```
-5. **Explain in a comment** — why does the reverse chain visit `mb2` before `mb1`? What would change if the order were reversed?
-
-> **Stuck?** Run `mininet> h2 python3 lab3_skeleton.py` for a reminder, or compare with `lab3_solution.py`
+> **Stuck?** Compare with `solutions/reverse_route.sh`
 
 ---
 
@@ -467,14 +429,13 @@ Use these files for the challenge:
 
 # Troubleshooting
 
-| Symptom                           | Fix                                                                         |
-| --------------------------------- | --------------------------------------------------------------------------- |
-| `ping6 fc00::2` fails after setup | recheck `seg6_enabled` and SID assignment on all hosts                      |
-| `curl http://10.0.0.2/...` fails  | restart with `./run_h2_http_server.sh`                                      |
-| IDS log is empty                  | restart with `./run_mb2_ids.sh` before sending traffic                      |
-| reverse path not working          | check `h2 ip route show`                                                    |
-| `tshark` shows no SRH             | confirm route uses `mode encap` and includes the final SID in the segs list |
-| `mb1` capture shows only requests | reverse route is missing or incorrect on `h2`                               |
+| Symptom                            | Fix                                                            |
+| ---------------------------------- | -------------------------------------------------------------- |
+| `ping6 fc00::2` fails after setup  | recheck `seg6_enabled` and SID assignment on all hosts         |
+| `curl http://10.0.0.2/...` fails   | restart with `./run_h2_http_server.sh`                         |
+| IDS log is empty                   | restart with `./run_mb2_ids.sh` before sending traffic         |
+| verify shows reverse route missing | check the DESTINATION and SEGS blanks in `reverse_route.sh`    |
+| `tshark` shows no SRH              | confirm route uses `mode encap` and the segs include `fc00::1` |
 
 ---
 
@@ -482,13 +443,15 @@ Use these files for the challenge:
 
 # Hints
 
-- **Reverse segs order** — for `h2 → mb2 → mb1 → h1`, the segs list is `fc00::b2,fc00::b1,fc00::1`
-- **Verify on `mb1`** — open `./enter_host.sh mb1` and run:
-```bash
-tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
-```
-- **What to expect** — before the reverse route, `mb1` sees only `h1 → h2` echo requests; after, the same `h1 ping -c 3 10.0.0.2` also produces `h2 → h1` echo replies on `mb1`
-- **SRv6 sysctls on `h2`** — `h2` needs the same `forwarding` and `seg6_enabled` settings as `h1`; run `configure_srv6.py` if you are not sure
+- **Destination** — `h1`'s IPv4 address is `10.0.0.1`
+- **Segs order** — for `h2 → mb2 → mb1 → h1`, the list is `fc00::b2,fc00::b1,fc00::1`
+- **Bonus** — once `verify.py` passes, open `./enter_host.sh mb1` and run:
+
+  ```bash
+  tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
+  ```
+
+  Then `mininet> h1 ping -c 3 10.0.0.2` — before the reverse route `mb1` sees only requests; after, it sees both requests and replies
 
 ---
 
