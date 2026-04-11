@@ -19,16 +19,14 @@ This is the smallest topology in the workshop that still shows:
   - rerouting after the s1-s2 link fails
 
 Usage:
-    sudo python3 triangle_topology.py --onos
+    sudo python3 triangle_topology.py
 """
-
-import argparse
 
 from mininet.cli import CLI
 from mininet.link import TCLink
 from mininet.log import setLogLevel
 from mininet.net import Mininet
-from mininet.node import DefaultController, OVSSwitch, RemoteController
+from mininet.node import OVSSwitch, RemoteController
 from mininet.topo import Topo
 
 
@@ -86,15 +84,11 @@ def print_topology_info():
     print("═" * 60 + "\n")
 
 
-def run(use_onos=False):
+def run():
     setLogLevel("info")
 
-    if use_onos:
-        print("[Controller] Connecting to ONOS at 127.0.0.1:6653")
-        controller = lambda name: RemoteController(name, ip="127.0.0.1", port=6653)
-    else:
-        print("[Controller] Using OVS default controller (no ONOS)")
-        controller = DefaultController
+    print("[Controller] Connecting to ONOS at 127.0.0.1:6653")
+    controller = lambda name: RemoteController(name, ip="127.0.0.1", port=6653)
 
     net = Mininet(
         topo=TriangleTopo(),
@@ -112,12 +106,4 @@ def run(use_onos=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Triangle topology for Lab 2")
-    parser.add_argument(
-        "--onos",
-        action="store_true",
-        help="Connect switches to the ONOS controller",
-    )
-    args = parser.parse_args()
-
-    run(use_onos=args.onos)
+    run()
