@@ -2,6 +2,7 @@
 
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pid="$(pgrep -f 'mininet:h2' | head -1 || true)"
 
 if [[ -z "${pid}" ]]; then
@@ -11,4 +12,4 @@ if [[ -z "${pid}" ]]; then
 fi
 
 echo "Starting Python HTTP server inside h2 (pid ${pid})..."
-exec sudo mnexec -a "${pid}" python3 -m http.server 80 --bind 0.0.0.0
+exec sudo mnexec -a "${pid}" python3 "${script_dir}/h2_http_server.py"

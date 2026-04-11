@@ -76,20 +76,30 @@ Two service nodes sit off the direct path — traffic only visits them if SRv6 s
 
 # Before you start
 
+**First: clean up Lab 2 completely.**
+
+1. Exit any running Mininet (`Ctrl+D` or `exit` in the Mininet terminal)
+2. Run `sudo mn -c` in a terminal
+3. Close all Lab 2 terminals
+
+Then open **four fresh terminals**.
+
+**In every terminal, start in the Lab 3 folder:**
+
+```bash
+cd ~/labs/lab3
+```
+
+Use the terminals like this:
+
 | Terminal           | Purpose                                                        |
 | ------------------ | -------------------------------------------------------------- |
 | 1 — Mininet        | start topology, run host commands                              |
 | 2 — h2 HTTP server | `./run_h2_http_server.sh`                                      |
 | 3 — mb2 IDS        | `./run_mb2_ids.sh`                                             |
-| 4 — Shell          | `preflight_check.py`, `exercises/verify.py`, `./enter_host.sh` |
+| 4 — Shell          | `exercises/verify.py`, `./enter_host.sh`                       |
 
-- work from `~/labs/lab3`
 - `sudo` is required for Mininet
-- run host commands from the Mininet CLI: `mininet> h1 ip -6 route show`
-- or open a dedicated shell inside any host with `enter_host.sh`:
-```bash
-./enter_host.sh h1
-  ```
 
 ---
 
@@ -97,31 +107,25 @@ Two service nodes sit off the direct path — traffic only visits them if SRv6 s
 
 # Start and verify
 
-Start the topology (terminal 1):
+Start Mininet in terminal 1. This creates the topology and gives you the CLI you will use for the rest of the lab:
 
 ```bash
 sudo python3 topology.py
 ```
 
-Lab 3 uses standalone OVS switches with no controller — SRv6 steering is programmed directly on the hosts using Linux routing, so ONOS is not needed.
-
-Verify connectivity, then start the HTTP server:
+Before touching SRv6, confirm the plain network works end to end:
 
 ```text
 mininet> pingall
 ```
 
+Then start the HTTP server in terminal 2 so `h2` is ready for the traffic tests that follow:
+
 ```bash
 ./run_h2_http_server.sh
 ```
 
-Run the preflight check (terminal 4):
-
-```bash
-python3 preflight_check.py
-```
-
-> **If the preflight check fails** make sure `pingall` has succeeded and the topology is still running before investigating further.
+> **Why this order?** First prove the baseline network works, then bring up the application, then add SRv6 steering. Lab 3 does not use ONOS — the steering behavior comes from Linux routing on the hosts.
 
 ---
 
@@ -133,9 +137,9 @@ Enable IPv6 SIDs first, then compare before and after steering
 
 ---
 
-# How `configure_srv6.py` works
+# Set up SRv6 on every host
 
-The script runs these three steps on every host (you don't need to type them):
+Instead of typing the same setup four times, you will use the helper script `configure_srv6.py`. It applies these three steps on each host:
 
 ```text
 sysctl -w net.ipv6.conf.all.forwarding=1
@@ -205,7 +209,7 @@ Before adding an SRv6 tunnel route, confirm plain IPv4 still bypasses the servic
 
 SRv6 is enabled on the hosts, but no steering rule has been added yet — traffic still takes the direct `h1 → s1 → s2 → h2` path.
 
-First, start the IDS from the `mb2 service terminal` so you can see what it captures:
+First, start the IDS in terminal 3 so you can see what it captures:
 
 ```bash
 ./run_mb2_ids.sh
@@ -307,7 +311,7 @@ mininet> h1 ip route show
 
 # Test the service chain
 
-Send a normal request and watch the `mb2 IDS terminal`:
+Send a normal request and watch terminal 3:
 
 ```text
 mininet> h1 curl http://10.0.0.2/index.html
@@ -407,6 +411,31 @@ Right now `h2` sends replies directly back to `h1`, bypassing the service chain 
 
 <!-- _class: independent compact -->
 
+# Exercise — Observe The Problem
+
+From terminal 4, make sure you are in `~/labs/lab3`, then open a shell inside `mb1` and start an ICMP capture:
+
+```bash
+./enter_host.sh mb1
+tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
+```
+
+Then from Mininet send exactly one ping. After it finishes, return to the `tshark` terminal and stop the capture with `Ctrl+C`:
+
+```text
+mininet> h1 ping -c 1 10.0.0.2
+```
+
+```text
+10.0.0.1 -> 10.0.0.2   ICMP Echo (ping) request
+```
+
+> **Expected** `mb1` sees the request, but not the reply. That shows the forward path is steered through `mb1`, while the return path still bypasses it.
+
+---
+
+<!-- _class: independent compact -->
+
 # Exercise — Tasks
 
 1. **Fill in the two blanks** in `exercises/reverse_route.sh`, then run:
@@ -445,13 +474,7 @@ Right now `h2` sends replies directly back to `h1`, bypassing the service chain 
 
 - **Destination** — `h1`'s IPv4 address is `10.0.0.1`
 - **Segs order** — for `h2 → mb2 → mb1 → h1`, the list is `fc00::b2,fc00::b1,fc00::1`
-- **Bonus** — once `verify.py` passes, open `./enter_host.sh mb1` and run:
-
-  ```bash
-  tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
-  ```
-
-  Then `mininet> h1 ping -c 3 10.0.0.2` — before the reverse route `mb1` sees only requests; after, it sees both requests and replies
+- **Re-check with `tshark`** — after `verify.py` passes, repeat the ICMP capture from the earlier slide. This time `mb1` should see both the request and the reply.
 
 ---
 
@@ -467,4 +490,3 @@ In this lab you:
 - confirmed that removing the route immediately bypasses the chain
 
 > **Coming up** Lab 4 automates what you did manually here — the SliceController programs SRv6 routes and combines them with OVS bandwidth reservation to provision complete transport slices.
-
