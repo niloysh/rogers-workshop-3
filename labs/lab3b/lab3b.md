@@ -27,7 +27,7 @@ Can Lab 3's SRv6 service chain run with ONOS controlling the switches?
 
 In this lab you will:
 
-- connect the topology to ONOS with a dual-homed Linux router (`r1`) replacing the third switch
+- connect the topology to ONOS and use a dual-homed Linux router (`r1`) as a faster alternate path between `s1` and `s2`
 - confirm that ONOS's reactive forwarding handles IPv6 traffic
 - run the SRv6 service chain through `mb1` and `mb2`
 - add `r1` to the segment list and observe latency drop from ~60 ms to ~20 ms
@@ -62,7 +62,7 @@ onos> cfg get org.onosproject.fwd.ReactiveForwarding
 # Lab 3b topology
 
 <div class="topology-figure compact">
-  <img src="../../assets/figures/lab3-service-chain-topology.svg" alt="Lab 3b topology — same layout as Lab 3 but switches connect to ONOS." />
+  <img src="../../assets/figures/lab3b-onos-topology.svg" alt="Lab 3b topology with h1 on s1, h2 plus mb1 and mb2 on s2, and dual-homed router r1 forming a faster alternate path between the two switches." />
 </div>
 
 | Node | Role                | IPv4     | SRv6 SID  |

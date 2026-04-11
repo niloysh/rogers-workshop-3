@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """
-Exercise 3 - Solution
+Exercise 2 - Solution
 =====================
 Usage:
-    sudo python3 exercise3_solution.py
+    sudo python3 solutions/part2.py
 """
 
+import sys
 import time
+from pathlib import Path
 from mininet.net import Mininet
 from mininet.node import OVSKernelSwitch
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+
+LAB4_DIR = Path(__file__).resolve().parents[1]
+if str(LAB4_DIR) not in sys.path:
+    sys.path.insert(0, str(LAB4_DIR))
 
 from slice_controller import SliceController, AdmissionError, MB1_LOG
 

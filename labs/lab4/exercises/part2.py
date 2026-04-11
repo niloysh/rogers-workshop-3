@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Exercise 3 - Slice Admission Control
+Exercise 2 - Slice Admission Control
 =====================================
 Topology:
 
@@ -48,15 +48,21 @@ Further reading:
   Management, Vol. 20(2), pp. 1110-1124, June 2023.
 
 Usage:
-    sudo python3 exercise3_skeleton.py
+    sudo python3 exercises/part2.py
 """
 
+import sys
 import time
+from pathlib import Path
 from mininet.net import Mininet
 from mininet.node import OVSKernelSwitch
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
+
+LAB4_DIR = Path(__file__).resolve().parents[1]
+if str(LAB4_DIR) not in sys.path:
+    sys.path.insert(0, str(LAB4_DIR))
 
 from slice_controller import SliceController, AdmissionError, MB1_LOG, MB2_LOG
 

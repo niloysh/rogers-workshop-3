@@ -4,7 +4,8 @@ topology.py
 ────────────────
 Lab 3b topology — SRv6 Service Function Chaining with ONOS.
 
-s3 is replaced by r1, a dual-homed Linux host acting as an SRv6 router.
+Two OpenFlow switches carry the baseline path between h1 and h2.
+A dual-homed Linux host, r1, adds an alternate path between s1 and s2.
 Unlike an OVS switch, r1 can be an SRv6 segment endpoint: it receives
 packets addressed to its SID, processes the SRH in the Linux kernel, and
 forwards to the next segment.
@@ -27,11 +28,14 @@ Physical layout:
     h2  : traffic destination  (IPv4: 10.0.0.2,  SRv6 SID: fc00::2)
     mb1 : waypoint 1           (IPv4: 10.0.0.3,  SRv6 SID: fc00::b1)
     mb2 : IDS                  (IPv4: 10.0.0.4,  SRv6 SID: fc00::b2)
-    r1  : SRv6 router          (IPv4: 10.0.0.5,  SRv6 SID: fc00::a1)
+    r1  : SRv6 router          (IPv4: 10.0.0.5,  SRv6 SID: fc00::a1 / fc00::a2)
     s1  : OVS switch 1 (OpenFlow13, controlled by ONOS)
     s2  : OVS switch 2 (OpenFlow13, controlled by ONOS)
 
-Service chain:
+Baseline service chain:
+    h1 → mb1 (waypoint 1) → mb2 (IDS) → h2
+
+Latency-optimized path after adding r1 to the segment list:
     h1 → r1 → mb1 (waypoint 1) → mb2 (IDS) → h2
 
 Usage:
