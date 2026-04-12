@@ -13,11 +13,13 @@ Extends Lab 4 with:
 
 Physical layout:
 
-    h1 ─┐                                      ┌─ h2
-    h3 ─┤── s1 ──[30ms, 10Mbps]── s2 ─┬── mb1
-        │   │  [5ms]       [5ms]   │   └─ mb2
-        │   └────── r1 ────────────┘
-        └──────────────────────────
+                               mb1   mb2
+                                │     │
+                                └──┬──┘
+    h1 ──┐                         │
+         ├── s1 ──[30ms, 10Mbps]─── s2 ── h2
+    h3 ──┘   │                      │
+             └──────[5ms]── r1 ──[5ms]
 
 SRv6 SIDs:
     h1  : fc00::1
@@ -97,16 +99,28 @@ class Lab4bTopo(Topo):
         self.addLink(r1, s2, cls=TCLink, bw=LINK_BW_MBPS, delay=ALT_DELAY)
 
 
-def print_topology_info():
+def get_topology_diagram():
+    return "\n".join([
+        "                               mb1   mb2",
+        "                                │     │",
+        "                                └──┬──┘",
+        "    h1 ──┐                         │",
+        f"         ├── s1 ──[{BOTTLENECK_DELAY},{BOTTLENECK_BW}Mbps]─── s2 ── h2",
+        "    h3 ──┘   │                      │",
+        f"             └──────────[{ALT_DELAY}]── r1 ──[{ALT_DELAY}]",
+    ])
+
+
+def print_topology_info(include_details=True):
     print("\n" + "═" * 62)
     print("  Lab 4b — Transport Slicing with ONOS")
     print("═" * 62)
-    print(f"""
-    h1 ─┐                                       ┌─ h2
-    h3 ─┤── s1 ──[{BOTTLENECK_DELAY},{BOTTLENECK_BW}Mbps]── s2 ─┤── mb1
-        │   │  [{ALT_DELAY}]        [{ALT_DELAY}]  │   └─ mb2
-        │   └────────── r1 ──────────┘
-    """)
+    print(get_topology_diagram())
+    if not include_details:
+        print("═" * 62 + "\n")
+        return
+
+    print()
     print(f"  {'Node':<8} {'IPv4':<16} {'SRv6 SID':<34} {'Role'}")
     print(f"  {'────':<8} {'────':<16} {'────────':<34} {'────'}")
     roles = {

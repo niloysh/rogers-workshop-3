@@ -28,7 +28,7 @@ LAB4B_DIR = Path(__file__).resolve().parent
 if str(LAB4B_DIR) not in sys.path:
     sys.path.insert(0, str(LAB4B_DIR))
 
-from topology import Lab4bTopo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW
+from topology import Lab4bTopo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW, print_topology_info
 from slice_controller import SliceController, MB1_LOG
 
 H1_PORT = 5201
@@ -66,17 +66,9 @@ def run_demo(net):
     s1  = net.get('s1')
     s2  = net.get('s2')
 
-    sep = "=" * 64
-    print(f"\n{sep}")
-    print("  LAB 4b — TRANSPORT SLICE DEMO (ONOS)")
-    print(sep)
+    print_topology_info(include_details=False)
+    print("  Interactive transport slice demo")
     print(f"""
-Topology:
-    h1 ─┐                                      ┌─ h2
-    h3 ─┤── s1 ──[30ms, {BOTTLENECK_BW} Mbps]── s2 ─┤── mb1
-        │   │  [5ms]          [5ms]  │   └─ mb2
-        │   └──────── r1 ────────────┘
-
 Terminals to open:
     tail -F /tmp/iperf_h1.log
     tail -F /tmp/iperf_h3.log
