@@ -52,14 +52,6 @@ HOST_IPS = {
     'r1':  '10.0.0.6/24',
 }
 
-HOST_MACS = {
-    'h1':  '00:00:00:00:00:01',
-    'h2':  '00:00:00:00:00:02',
-    'h3':  '00:00:00:00:00:03',
-    'mb1': '00:00:00:00:00:04',
-    'mb2': '00:00:00:00:00:05',
-}
-
 SRV6_SIDS = {
     'h1':  'fc00::1',
     'h2':  'fc00::2',
@@ -79,11 +71,11 @@ ONOS_PORT        = 6653
 
 class Lab4bTopo(Topo):
     def build(self):
-        h1  = self.addHost('h1',  ip=HOST_IPS['h1'],  mac=HOST_MACS['h1'])
-        h2  = self.addHost('h2',  ip=HOST_IPS['h2'],  mac=HOST_MACS['h2'])
-        h3  = self.addHost('h3',  ip=HOST_IPS['h3'],  mac=HOST_MACS['h3'])
-        mb1 = self.addHost('mb1', ip=HOST_IPS['mb1'], mac=HOST_MACS['mb1'])
-        mb2 = self.addHost('mb2', ip=HOST_IPS['mb2'], mac=HOST_MACS['mb2'])
+        h1  = self.addHost('h1',  ip=HOST_IPS['h1'])
+        h2  = self.addHost('h2',  ip=HOST_IPS['h2'])
+        h3  = self.addHost('h3',  ip=HOST_IPS['h3'])
+        mb1 = self.addHost('mb1', ip=HOST_IPS['mb1'])
+        mb2 = self.addHost('mb2', ip=HOST_IPS['mb2'])
         r1  = self.addHost('r1',  ip=HOST_IPS['r1'])
 
         s1 = self.addSwitch('s1', cls=OVSSwitch, protocols='OpenFlow13')
@@ -146,7 +138,7 @@ def run():
         controller=controller,
         switch=OVSSwitch,
         link=TCLink,
-        autoSetMacs=False,
+        autoSetMacs=True,
         waitConnected=True,
     )
     net.start()

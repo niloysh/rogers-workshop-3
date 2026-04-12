@@ -31,7 +31,7 @@ def main():
         controller=lambda name: RemoteController(name, ip=ONOS_IP, port=ONOS_PORT),
         switch=OVSSwitch,
         link=TCLink,
-        autoSetMacs=False,
+        autoSetMacs=True,
         waitConnected=True,
     )
     net.start()
@@ -45,9 +45,10 @@ def main():
         s2  = net.get('s2')
 
         sc = SliceController(net, ingress=s1, peer=s2, link_bw=BOTTLENECK_BW)
-        sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2", "r1")
 
         net.pingAll()
+        sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2", "r1")
+        sc.warmup_ndp("h1", "h2", "h3", "mb1", "mb2")
         sc.verify_srv6("h1", "h2", "mb1")
 
         h2.cmd("pkill -f iperf3 2>/dev/null; true")

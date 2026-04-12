@@ -88,10 +88,11 @@ Terminals to open:
     input("\n[ Press ENTER once ONOS is ready ] ▶  Start demo\n")
 
     sc = SliceController(net, s1, s2, link_bw=BOTTLENECK_BW)
-    sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2", "r1")
 
     info("*** Testing IPv4 connectivity (populates ONOS MAC table)\n")
     net.pingAll()
+    sc.configure_srv6("h1", "h2", "h3", "mb1", "mb2", "r1")
+    sc.warmup_ndp("h1", "h2", "h3", "mb1", "mb2")
     sc.verify_srv6("h1", "h2", "mb1")
     start_servers(h2)
 
@@ -153,13 +154,12 @@ Terminals to open:
     tail -F {MB1_LOG} → SHOWS TRAFFIC
     """)
 
-    # ── Phase 4 — path contract: steer via r1 (bypass bottleneck) ────────────
+    # ── Phase 4 — teardown ────────────────────────────────────────────────────
 
-    input("[ Press ENTER ] ▶  PHASE 4: Add r1 to the segment list")
+    input("[ Press ENTER ] ▶  PHASE 4: Teardown slice")
     print()
     stop_all(h1, h3, h2)
     sc.teardown("premium")
-    sc.provision("premium-r1", src="h1", dst="h2", chain=["r1", "mb1"], bw=8)
     sc.status()
     start_servers(h2)
     time.sleep(0.5)
@@ -167,35 +167,7 @@ Terminals to open:
     time.sleep(0.5)
     start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
     print(f"""
-  Phase 4 — Premium slice via r1 (alternate path)
-  ─────────────────────────────────────────────────
-  ┌─────────────────────────────────────────────────────────────┐
-  │  Path contract:      h1 → r1 → mb1 → h2   (SRv6 via r1)    │
-  │  Bandwidth contract: 8 Mbps (queue on s1-s2, now bypassed)  │
-  └─────────────────────────────────────────────────────────────┘
-
-  h1 travels s1→r1→s2 (5ms+5ms) instead of s1→s2 (30ms).
-  h1 leaves the bottleneck entirely — h3 gets the full {BOTTLENECK_BW} Mbps.
-
-    tail -F /tmp/iperf_h1.log   → ~8 Mbps (bottleneck bypassed)
-    tail -F /tmp/iperf_h3.log   → ~8 Mbps (bottleneck now uncontested)
-    tail -F {MB1_LOG} → SHOWS TRAFFIC
-    """)
-
-    # ── Phase 5 — teardown ────────────────────────────────────────────────────
-
-    input("[ Press ENTER ] ▶  PHASE 5: Teardown slice")
-    print()
-    stop_all(h1, h3, h2)
-    sc.teardown("premium-r1")
-    sc.status()
-    start_servers(h2)
-    time.sleep(0.5)
-    start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
-    time.sleep(0.5)
-    start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
-    print(f"""
-  Phase 5 — Slice torn down
+  Phase 4 — Slice torn down
   ───────────────────────────
   Queue removed. SRv6 route removed. Both back to best-effort on s1-s2.
 
@@ -217,7 +189,7 @@ def main():
         controller=lambda name: RemoteController(name, ip=ONOS_IP, port=ONOS_PORT),
         switch=OVSSwitch,
         link=TCLink,
-        autoSetMacs=False,
+        autoSetMacs=True,
         waitConnected=True,
     )
 

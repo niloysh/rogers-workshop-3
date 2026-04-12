@@ -249,6 +249,25 @@ class SliceController:
         print()
         return all_ok
 
+    def warmup_ndp(self, *names):
+        """
+        Fire one-shot ping6s between all listed hosts to populate NDP caches.
+
+        Call after pingAll() and configure_srv6(). Skips r1/r1b (they are
+        routers, not hosts with fc00:: SIDs reachable via ONOS reactive fwd).
+        """
+        host_names = [n for n in names if n not in ("r1", "r1b") and n in SID]
+        print(f"\n[SliceController] Warming up NDP between {len(host_names)} hosts")
+        for src_name in host_names:
+            src = self.net.get(src_name)
+            for dst_name in host_names:
+                if dst_name != src_name:
+                    src.cmd(
+                        f"ping6 -c 1 -W 1 {SID[dst_name]} > /dev/null 2>&1 &"
+                    )
+        time.sleep(2)
+        print("[SliceController] NDP warmup complete\n")
+
     # ── Internal: QoS initialisation ─────────────────────────────────────────
 
     def _init_qos(self):
