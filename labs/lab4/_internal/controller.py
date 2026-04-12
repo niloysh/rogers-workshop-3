@@ -79,11 +79,12 @@ class SliceController:
     link_bw  : int        Bottleneck link capacity in Mbps (default 10).
     """
 
-    def __init__(self, net, ingress, peer, link_bw=10):
+    def __init__(self, net, ingress, peer, link_bw=10, link_delay=None):
         self.net            = net
         self.ingress        = ingress
         self.peer           = peer
         self.link_bw        = link_bw
+        self._link_delay    = link_delay
         self._slices        = {}
         self._next_queue_id = 1
 
@@ -317,6 +318,16 @@ class SliceController:
             f'other-config:burst=125000'
         )
 
+        # OVS linux-htb replaces the tc netem qdisc that Mininet's TCLink
+        # installed on this interface.  Re-add the delay as a leaf under
+        # queue-0's HTB class (OVS maps queue ID N → TC class 1:N+1, so
+        # queue 0 → class 1:1) so that the expected RTT is preserved.
+        if self._link_delay:
+            self.ingress.cmd(
+                f"tc qdisc add dev {iface} parent 1:1 handle 10: "
+                f"netem delay {self._link_delay} limit 50 2>/dev/null; true"
+            )
+
         ofport = self._get_ofport(self.ingress, iface)
         return iface, ofport
 
@@ -336,11 +347,18 @@ class SliceController:
             f'-- set qos {qos_uuid} queues:{queue_id}=@q'
         )
         htb_class = f"1:{queue_id + 1}"
-        self.ingress.cmd(
-            f"tc qdisc add dev {self._iface} parent {htb_class} "
-            f"handle {queue_id + 1}0: fq_codel limit 50 target 5ms interval 100ms "
-            f"2>/dev/null; true"
-        )
+        if self._link_delay:
+            self.ingress.cmd(
+                f"tc qdisc add dev {self._iface} parent {htb_class} "
+                f"handle {queue_id + 1}0: netem delay {self._link_delay} limit 50 "
+                f"2>/dev/null; true"
+            )
+        else:
+            self.ingress.cmd(
+                f"tc qdisc add dev {self._iface} parent {htb_class} "
+                f"handle {queue_id + 1}0: fq_codel limit 50 target 5ms interval 100ms "
+                f"2>/dev/null; true"
+            )
 
     def _add_queue_flow(self, src_host, queue_id):
         """

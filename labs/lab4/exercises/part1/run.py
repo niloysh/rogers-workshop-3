@@ -42,30 +42,45 @@ Keep the telemetry monitor in the service chain, and leave the controller code a
         logger_waypoints=("mb1",),
         tail_paths=("/tmp/iperf_h1.log", "/tmp/iperf_h3.log", PING_LOG, MB1_LOG),
         ping_watch={"source": "h1", "target": "h2", "tag": "h1_h2"},
+        before_apply_text=f"""
+  Phase 1 — Contention (no slice)
+  ────────────────────────────────
+  h1 and h3 both share the 10 Mbps direct bottleneck (s1→s2).
+  Contention degrades BOTH bandwidth AND latency:
+
+    tail -F /tmp/iperf_h1.log   → h1 gets ~5 Mbps
+    tail -F /tmp/iperf_h3.log   → h3 gets ~5 Mbps
+    tail -F {PING_LOG} → RTT climbs above 60 ms (queue builds up)
+    tail -F {MB1_LOG} → SILENCE (no slice, no SRv6)
+""",
         after_apply_text=f"""
-Observe the result:
+  Phase 2 — Low-latency slice ACTIVE
+  ────────────────────────────────────
+  h1's traffic is SRv6-steered off the bottleneck, through the
+  alternate r1 path (5 ms + 5 ms) and the telemetry monitor (mb1).
 
-  tail -F /tmp/iperf_h1.log   -> ?
-  tail -F /tmp/iperf_h3.log   -> ?
-  tail -F {PING_LOG} -> ?
-  tail -F {MB1_LOG} -> ?
+    tail -F /tmp/iperf_h1.log   → h1 recovers toward ~8 Mbps (uncongested path)
+    tail -F /tmp/iperf_h3.log   → h3 gets the full 10 Mbps to itself
+    tail -F {PING_LOG} → RTT drops to ~20 ms  (ping follows h1's new path)
+    tail -F {MB1_LOG} → SHOWS TRAFFIC (mb1 in the chain)
 
-Questions:
-  - Did h1 get off the direct bottleneck?
-  - Did the RTT settle near ~20 ms after the request was applied?
-  - Why did h3's throughput change?
-  - Which field in SLICE_REQUEST expressed the path objective?
-  - Which waypoint corresponds to the telemetry monitor?
+  Questions:
+    - Which field in SLICE_REQUEST moved h1 off the direct path?
+    - Why does h3's throughput improve when h1 leaves the bottleneck?
+    - Why does the RTT drop so sharply — is it only about congestion, or also path length?
 """,
         after_teardown_text=f"""
-Slice removed. What do you see now?
+  Phase 3 — Slice torn down
+  ──────────────────────────
+  SRv6 route removed. h1 falls back to the direct bottleneck.
 
-  tail -F /tmp/iperf_h1.log   -> ?
-  tail -F /tmp/iperf_h3.log   -> ?
-  tail -F {PING_LOG} -> ?
-  tail -F {MB1_LOG} -> ?
+    tail -F /tmp/iperf_h1.log   → h1 drops back to ~5 Mbps
+    tail -F /tmp/iperf_h3.log   → h3 drops back to ~5 Mbps
+    tail -F {PING_LOG} → RTT climbs back up (queue rebuilds under contention)
+    tail -F {MB1_LOG} → SILENT again
 
-Why did the behavior revert?
+  The network reverted because the slice was the only thing enforcing the path.
+  Without it, ONOS reactive forwarding puts both flows back on the shortest path.
 """,
     )
 

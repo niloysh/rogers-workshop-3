@@ -12,7 +12,7 @@ from mininet.link import TCLink
 from mininet.log import setLogLevel, info
 from mininet.cli import CLI
 
-from .topology import Lab4Topo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW, print_topology_info
+from .topology import Lab4Topo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW, BOTTLENECK_DELAY, print_topology_info
 from .controller import SliceController, AdmissionError
 from .demo_common import (
     H1_PORT,
@@ -134,8 +134,31 @@ def run_single_slice_exercise(
     verify_waypoints=("mb1",),
     use_contention=True,
     ping_watch=None,
+    before_contention_text=None,
+    before_apply_text=None,
 ):
-    """Run a learner-facing exercise centered on one slice request."""
+    """Run a learner-facing exercise centered on one slice request.
+
+    Phase structure is controlled by the two optional pre-slice parameters:
+
+    Both None (default):
+        traffic starts after the slice is applied (original behaviour).
+
+    before_apply_text only:
+        h1 + h3 start together before the slice, showing contention impact
+        on both bandwidth and latency before the slice is applied.
+
+    before_contention_text + before_apply_text:
+        Four-phase flow —
+          1. h1 alone  (before_contention_text) — clean baseline
+          2. h3 joins  (before_apply_text)       — contention degrades both metrics
+          3. slice on  (after_apply_text)         — slice restores both metrics
+          4. slice off (after_teardown_text)      — regression confirms the slice was doing the work
+
+        In all pre-slice modes traffic keeps running through the apply and
+        teardown transitions; only the ping is restarted at each boundary for
+        a clean per-phase reading.
+    """
     setLogLevel("info")
 
     net = _build_network()
@@ -146,59 +169,93 @@ def run_single_slice_exercise(
         s1 = net.get("s1")
         s2 = net.get("s2")
 
-        sc = SliceController(net, ingress=s1, peer=s2, link_bw=BOTTLENECK_BW)
+        sc = SliceController(net, ingress=s1, peer=s2, link_bw=BOTTLENECK_BW, link_delay=BOTTLENECK_DELAY)
 
         print_topology_info(include_details=True)
         print(f"  {title}")
-        slice_request = _prompt_for_request(
-            request_path,
-            prompt_text=intro,
-        )
+        print()
 
         _prepare_lab(net, sc, verify_waypoints)
         start_servers(h2)
         _start_waypoint_loggers(sc, logger_waypoints)
+
+        ping_source_host = None
+        ping_target_ip = None
+        ping_tag = None
         if ping_watch:
             named_hosts = {"h1": h1, "h2": h2, "h3": h3}
-            source_host = named_hosts[ping_watch["source"]]
+            ping_source_host = named_hosts[ping_watch["source"]]
             target_name = ping_watch["target"]
-            target_ip = named_hosts[target_name].IP() if target_name in named_hosts else target_name
-            start_ping(
-                source_host,
-                target_ip,
-                ping_watch.get("tag", f"{ping_watch['source']}_{target_name}"),
-            )
+            ping_target_ip = named_hosts[target_name].IP() if target_name in named_hosts else target_name
+            ping_tag = ping_watch.get("tag", f"{ping_watch['source']}_{target_name}")
+            start_ping(ping_source_host, ping_target_ip, ping_tag)
 
         print("Logs to watch:")
         for path in tail_paths:
             print(f"  tail -F {path}")
         print()
 
-        input("[ Press ENTER ] ▶  Apply the slice request")
-        print()
-        apply_slice_request(sc, slice_request)
-        sc.status()
+        if before_apply_text is not None:
+            # ── Pre-slice phases (traffic running before slice is applied) ────
 
-        start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
-        if use_contention:
-            time.sleep(0.5)
-            start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
+            if before_contention_text is not None:
+                # Phase 1: h1 alone — clean baseline
+                start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
+                print(before_contention_text)
+                input("[ Press ENTER ] ▶  Add contending traffic (h3)")
+                print()
 
-        print(after_apply_text)
+            # Phase 1 (no baseline sub-phase) or Phase 2 (with baseline): contention
+            if before_contention_text is None:
+                start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
+            if use_contention:
+                time.sleep(0.5)
+                start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
 
-        input("[ Press ENTER ] ▶  Teardown the slice")
-        print()
-        stop_all(h1, h3, h2)
-        teardown_slice_request(sc, slice_request)
-        sc.status()
+            print(before_apply_text)
+            slice_request = _prompt_for_request(request_path, prompt_text=intro)
+            apply_slice_request(sc, slice_request)
+            sc.status()
+            if ping_source_host:
+                start_ping(ping_source_host, ping_target_ip, ping_tag)
+            print(after_apply_text)
 
-        start_servers(h2)
-        start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
-        if use_contention:
-            time.sleep(0.5)
-            start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
+            input("[ Press ENTER ] ▶  Teardown the slice")
+            print()
+            teardown_slice_request(sc, slice_request)
+            sc.status()
+            if ping_source_host:
+                start_ping(ping_source_host, ping_target_ip, ping_tag)
+            print(after_teardown_text)
 
-        print(after_teardown_text)
+        else:
+            # ── Original flow: traffic starts after slice is applied ──────────
+            slice_request = _prompt_for_request(request_path, prompt_text=intro)
+            apply_slice_request(sc, slice_request)
+            sc.status()
+            if ping_source_host:
+                start_ping(ping_source_host, ping_target_ip, ping_tag)
+
+            start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
+            if use_contention:
+                time.sleep(0.5)
+                start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
+            print(after_apply_text)
+
+            input("[ Press ENTER ] ▶  Teardown the slice")
+            print()
+            stop_all(h1, h3, h2)
+            teardown_slice_request(sc, slice_request)
+            sc.status()
+            if ping_source_host:
+                start_ping(ping_source_host, ping_target_ip, ping_tag)
+
+            start_servers(h2)
+            start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
+            if use_contention:
+                time.sleep(0.5)
+                start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
+            print(after_teardown_text)
 
         input("[ Press ENTER ] ▶  Open Mininet CLI (type 'exit' to finish)")
         CLI(net)
@@ -231,7 +288,7 @@ def run_admission_control_exercise(
         s1 = net.get("s1")
         s2 = net.get("s2")
 
-        sc = SliceController(net, ingress=s1, peer=s2, link_bw=BOTTLENECK_BW)
+        sc = SliceController(net, ingress=s1, peer=s2, link_bw=BOTTLENECK_BW, link_delay=BOTTLENECK_DELAY)
 
         print_topology_info(include_details=True)
         print(f"  {title}")

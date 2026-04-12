@@ -384,6 +384,8 @@ Watch as well:
 tail -F /tmp/ping_h1_h2.log
 ```
 
+The runner restarts the ping at each phase change so you see fresh RTT samples.
+
 > **What to predict first** If `h1` moves off the direct bottleneck, what should happen to `h3`'s throughput?
 
 ---
@@ -395,6 +397,7 @@ tail -F /tmp/ping_h1_h2.log
 - `h1` should move to the faster path via `r1`
 - `h3` should remain on the direct `s1-s2` bottleneck
 - `/tmp/ping_h1_h2.log` should settle near ~20 ms after the low-latency request is applied
+- after teardown, the ping should rise again toward the higher baseline RTT
 - `mb1` should still log the slice traffic
 - no queue is reserved, so this is a path objective, not a bandwidth guarantee
 

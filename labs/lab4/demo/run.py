@@ -32,7 +32,7 @@ LAB4_DIR = Path(__file__).resolve().parents[1]
 if str(LAB4_DIR) not in sys.path:
     sys.path.insert(0, str(LAB4_DIR))
 
-from _internal.topology import Lab4Topo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW, print_topology_info
+from _internal.topology import Lab4Topo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW, BOTTLENECK_DELAY, print_topology_info
 from _internal.controller import SliceController, MB1_LOG
 from _internal.demo_common import H1_PORT, H3_PORT, start_servers, start_client, stop_all, cleanup_demo_hosts
 from _internal.slice_request import (
@@ -117,7 +117,7 @@ Terminals to open:
     print("    onos> cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true")
     input("\n[ Press ENTER once ONOS is ready ] ▶  Start demo\n")
 
-    sc = SliceController(net, s1, s2, link_bw=BOTTLENECK_BW)
+    sc = SliceController(net, s1, s2, link_bw=BOTTLENECK_BW, link_delay=BOTTLENECK_DELAY)
 
     info("*** Testing IPv4 connectivity (populates ONOS MAC table)\n")
     net.pingAll()

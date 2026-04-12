@@ -12,7 +12,7 @@ SLICE_REQUEST = {
     "name": "express",
     "src": "h1",
     "dst": "h2",
-    "latency_objective": "standard",
+    "latency_objective": "low",
     "bandwidth_mbps": 0,
     "waypoints": ["mb1"],
 }
