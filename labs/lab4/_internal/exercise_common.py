@@ -14,7 +14,15 @@ from mininet.cli import CLI
 
 from .topology import Lab4Topo, ONOS_IP, ONOS_PORT, BOTTLENECK_BW, print_topology_info
 from .controller import SliceController, AdmissionError
-from .demo_common import H1_PORT, H3_PORT, start_servers, start_client, stop_all, cleanup_demo_hosts
+from .demo_common import (
+    H1_PORT,
+    H3_PORT,
+    cleanup_demo_hosts,
+    start_client,
+    start_ping,
+    start_servers,
+    stop_all,
+)
 from .slice_request import (
     apply_slice_request,
     format_slice_realization,
@@ -125,6 +133,7 @@ def run_single_slice_exercise(
     after_teardown_text,
     verify_waypoints=("mb1",),
     use_contention=True,
+    ping_watch=None,
 ):
     """Run a learner-facing exercise centered on one slice request."""
     setLogLevel("info")
@@ -149,6 +158,16 @@ def run_single_slice_exercise(
         _prepare_lab(net, sc, verify_waypoints)
         start_servers(h2)
         _start_waypoint_loggers(sc, logger_waypoints)
+        if ping_watch:
+            named_hosts = {"h1": h1, "h2": h2, "h3": h3}
+            source_host = named_hosts[ping_watch["source"]]
+            target_name = ping_watch["target"]
+            target_ip = named_hosts[target_name].IP() if target_name in named_hosts else target_name
+            start_ping(
+                source_host,
+                target_ip,
+                ping_watch.get("tag", f"{ping_watch['source']}_{target_name}"),
+            )
 
         print("Logs to watch:")
         for path in tail_paths:
@@ -223,11 +242,6 @@ def run_admission_control_exercise(
         print("Baseline Slice:")
         print(format_slice_request(baseline_request, heading="Baseline Request"))
         print(format_slice_realization(baseline_request))
-        print()
-        slice_request = _prompt_for_request(
-            request_path,
-            prompt_text="Use the topology roles above to reason about your competing request.",
-        )
 
         _prepare_lab(net, sc, verify_waypoints)
         start_servers(h2)
@@ -252,17 +266,47 @@ Baseline slice active.
   h3 is still best-effort and competes for the remaining capacity.
 """)
 
-        input("[ Press ENTER ] ▶  Try to provision your competing slice request")
-        print()
+        print("The runner will keep the baseline slice active and retry your request until it is admitted.\n")
 
-        try:
-            apply_slice_request(sc, slice_request)
-            print("[result] Your request was admitted.\n")
-        except AdmissionError as err:
-            print(err)
-            print("\n[result] Request rejected. Adjust only SLICE_REQUEST and rerun the exercise.\n")
+        while True:
+            slice_request = _prompt_for_request(
+                request_path,
+                prompt_text="Use the topology roles above to reason about your competing request.",
+            )
+
+            input("[ Press ENTER ] ▶  Try to provision your competing slice request")
+            print()
+
+            try:
+                apply_slice_request(sc, slice_request)
+                print("[result] Your request was admitted.\n")
+                break
+            except AdmissionError as err:
+                print(err)
+                print("\n[result] Request rejected. Adjust only SLICE_REQUEST and try again.\n")
+                sc.status()
 
         sc.status()
+        print("""
+Reflection:
+
+  The baseline slice arrived first, so it kept its 8 Mbps reservation.
+  Your second request was judged only against the remaining capacity.
+
+  What if the second request were actually more premium than the first one?
+  This controller does not know about priority, preemption, revenue, or SLA class.
+  It uses a simple first-come-first-served admission decision.
+
+  A smarter admission controller might weigh:
+    - slice priority or service class
+    - preemption policy
+    - business value or SLA importance
+    - expected future demand
+
+  Further reading:
+    M. Sulaiman et al., "Coordinated Slicing and Admission Control using
+    Multi-Agent Deep Reinforcement Learning," IEEE TNSM, 20(2), June 2023.
+""")
 
         input("[ Press ENTER ] ▶  Open Mininet CLI (type 'exit' to finish)")
         CLI(net)

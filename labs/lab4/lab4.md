@@ -310,6 +310,22 @@ When the slice is removed, both revert.
 
 ---
 
+<!-- _class: compact -->
+
+# Connecting the Dots
+
+What you just saw in the demo is the previous labs working together:
+
+| What you observed | What made it happen | Which earlier lab |
+| ----------------- | ------------------- | ----------------- |
+| `h1` recovered from ~5 Mbps to ~8 Mbps | programmable traffic treatment on the bottleneck | Lab 1 |
+| one service request was translated into concrete network actions | the transport slice controller follows the SDN controller principle and uses ONOS-managed switches underneath | Lab 2 |
+| `mb1` started seeing traffic | SRv6 forced traffic through an explicit waypoint | Lab 3 |
+
+> **The key idea** Lab 4 is not a separate mechanism. It combines programmable data-plane behavior, controller-driven realization, and SRv6 path steering into one service request.
+
+---
+
 <!-- _class: divider -->
 
 # Exercises
@@ -362,6 +378,12 @@ Edit when prompted:
 exercises/part1/slice_request.py
 ```
 
+Watch as well:
+
+```text
+tail -F /tmp/ping_h1_h2.log
+```
+
 > **What to predict first** If `h1` moves off the direct bottleneck, what should happen to `h3`'s throughput?
 
 ---
@@ -372,6 +394,7 @@ exercises/part1/slice_request.py
 
 - `h1` should move to the faster path via `r1`
 - `h3` should remain on the direct `s1-s2` bottleneck
+- `/tmp/ping_h1_h2.log` should settle near ~20 ms after the low-latency request is applied
 - `mb1` should still log the slice traffic
 - no queue is reserved, so this is a path objective, not a bandwidth guarantee
 
@@ -459,6 +482,9 @@ Edit when prompted:
 exercises/part3/slice_request.py
 ```
 
+If the request is rejected, edit the same file and retry.
+The runner keeps the baseline slice active and loops until your request is admitted.
+
 ---
 
 <!-- _class: compact -->
@@ -480,6 +506,31 @@ So:
 - best-effort traffic is not the same as a reservation
 
 > **Concept** Admission control is about finite resources. A request can be valid in structure and still be rejected by policy.
+
+---
+
+<!-- _class: compact -->
+
+# Beyond First-Come-First-Served
+
+In this exercise, the baseline premium slice arrives first and keeps its reservation.
+
+The second request is evaluated only against the remaining capacity.
+
+That is simple and easy to reason about, but it raises a useful question:
+
+**What if the second request were actually more premium than the first one?**
+
+Then a better admission controller might need to consider:
+
+- slice priority or service class
+- preemption policy
+- business value or SLA importance
+- predicted future demand
+
+Further reading:
+
+- M. Sulaiman et al., *Coordinated Slicing and Admission Control using Multi-Agent Deep Reinforcement Learning*, IEEE TNSM, 20(2), June 2023.
 
 ---
 

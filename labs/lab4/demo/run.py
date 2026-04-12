@@ -186,6 +186,19 @@ Terminals to open:
     tail -F /tmp/iperf_h1.log   → recovers to ~8 Mbps
     tail -F /tmp/iperf_h3.log   → squeezed to ~2 Mbps
     tail -F {MB1_LOG} → SHOWS TRAFFIC
+
+  Connecting the Dots
+  ───────────────────
+  Lab 1 — programmable data plane
+    The network's traffic treatment is not fixed. Realizing the slice changes
+    how traffic is handled on the bottleneck.
+
+  Lab 2 — SDN controller principle
+    A transport slice controller takes one service request and turns it into
+    concrete network actions, using ONOS-managed switches underneath.
+
+  Lab 3 — SRv6 steering
+    The slice forces h1's traffic through an explicit waypoint: mb1.
     """)
 
     # ── Phase 4 — teardown ────────────────────────────────────────────────────

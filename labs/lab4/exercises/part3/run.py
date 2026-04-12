@@ -10,7 +10,8 @@ Goal:
 Workflow:
   1. Start this runner.
   2. When prompted, edit `exercises/part3/slice_request.py`.
-  3. Return here and press Enter to load your request.
+  3. Return here and press Enter to retry your request.
+  4. Keep adjusting the request until the controller admits it.
 
 Usage:
     sudo python3 exercises/part3/run.py
