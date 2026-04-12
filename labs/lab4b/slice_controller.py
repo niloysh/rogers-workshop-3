@@ -492,16 +492,17 @@ class SliceController:
         host.cmd("pkill -f mb_logger 2>/dev/null; true")
 
     def _start_mb1_logger(self, mb1):
-        """Bandwidth logger: counts bytes from h1's MAC, reports Mbps."""
-        h1_mac = self.net.get("h1").MAC()
+        """Bandwidth logger: counts SRv6 packets arriving at mb1, reports Mbps."""
+        mb1_mac = mb1.MAC()
         script = "/tmp/mb1_logger.py"
         lines  = [
             "#!/usr/bin/env python3\n",
             "import socket, time, sys, signal\n",
             f'IFACE  = "mb1-eth0"\n',
             f'LOG    = "{MB1_LOG}"\n',
-            f'H1_MAC = bytes.fromhex("{h1_mac.replace(":", "")}")\n',
+            f'MB1_MAC = bytes.fromhex("{mb1_mac.replace(":", "")}")\n',
             "ETH_P_ALL = 0x0003\n",
+            "ETH_P_IPV6 = b'\\x86\\xdd'\n",
             "\n",
             "def loop():\n",
             "    sock = socket.socket(socket.AF_PACKET, socket.SOCK_RAW,\n",
@@ -514,7 +515,7 @@ class SliceController:
             "        while time.time() < deadline:\n",
             "            try:\n",
             "                pkt = sock.recv(65535)\n",
-            "                if pkt[6:12] == H1_MAC:\n",
+            "                if pkt[0:6] == MB1_MAC and pkt[12:14] == ETH_P_IPV6:\n",
             "                    total += len(pkt)\n",
             "            except socket.timeout:\n",
             "                break\n",
