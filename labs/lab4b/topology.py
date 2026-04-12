@@ -107,7 +107,7 @@ def get_topology_diagram():
         "    h1 ──┐                         │",
         f"         ├── s1 ──[{BOTTLENECK_DELAY},{BOTTLENECK_BW}Mbps]─── s2 ── h2",
         "    h3 ──┘   │                      │",
-        f"             └──────────[{ALT_DELAY}]── r1 ──[{ALT_DELAY}]",
+        f"             └──────────[{ALT_DELAY}]── r1 ──[{ALT_DELAY}]──┤",
     ])
 
 

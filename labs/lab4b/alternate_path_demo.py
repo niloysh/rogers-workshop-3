@@ -1,18 +1,17 @@
 #!/usr/bin/env python3
 """
-slice_demo.py — Lab 4b
-──────────────────────
-Interactive direct-path slice demo with ONOS.
+alternate_path_demo.py — Lab 4b
+───────────────────────────────
+Interactive alternate-path slice demo with ONOS.
 
-Prerequisites:
-    ONOS running with openflow, fwd, and proxyarp apps active:
-        onos> app activate org.onosproject.openflow
-        onos> app activate org.onosproject.fwd
-        onos> app activate org.onosproject.proxyarp
-        onos> cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true
+This demo mirrors the Lab 3b Step 4 idea inside the Lab 4b topology:
+  - baseline traffic uses the direct s1-s2 link
+  - h3 can congest that 10 Mbps bottleneck
+  - a path-only SRv6 slice steers h1 via r1 -> mb1 -> h2
+  - the improvement comes from path separation, not queue reservation
 
 Usage:
-    sudo python3 slice_demo.py
+    sudo python3 alternate_path_demo.py
 """
 
 import sys
@@ -42,8 +41,13 @@ def run_demo(net):
     s2  = net.get('s2')
 
     print_topology_info(include_details=False)
-    print("  Interactive direct-path slice demo")
+    print("  Interactive alternate-path demo via r1")
     print(f"""
+This demo isolates path steering:
+  - no queue reservation is installed on s1-s2
+  - h1 is steered over r1 -> mb1 -> h2
+  - h3 stays on the direct s1-s2 path
+
 Terminals to open:
     tail -F /tmp/iperf_h1.log
     tail -F /tmp/iperf_h3.log
@@ -70,9 +74,9 @@ Terminals to open:
     sc._start_mb1_logger(mb1)
     start_client(h1, h2.IP(), mbps=8, port=H1_PORT, tag="h1")
     print(f"""
-  Phase 1 — Baseline (no slice, no SRv6)
-  ────────────────────────────────────────
-  h1→h2 via the direct s1-s2 link (30 ms delay, {BOTTLENECK_BW} Mbps cap).
+  Phase 1 — Baseline (direct path, no slice)
+  ───────────────────────────────────────────
+  h1→h2 uses the direct s1-s2 link. There is no SRv6 steering yet.
   mb1 logger RUNNING but SILENT — traffic bypasses mb1.
 
     tail -F /tmp/iperf_h1.log   → ~8 Mbps
@@ -81,25 +85,25 @@ Terminals to open:
 
     # ── Phase 2 — contention ──────────────────────────────────────────────────
 
-    input("[ Press ENTER ] ▶  PHASE 2: h3 floods — contention on bottleneck")
+    input("[ Press ENTER ] ▶  PHASE 2: h3 floods — contention on s1-s2")
     print()
     start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
     print(f"""
-  Phase 2 — Contention (no slice)
-  ────────────────────────────────
-  h3 joins at 8 Mbps. TCP fair-share on the {BOTTLENECK_BW} Mbps bottleneck.
+  Phase 2 — Contention (still no slice)
+  ──────────────────────────────────────
+  h1 and h3 now share the same {BOTTLENECK_BW} Mbps direct bottleneck.
 
     tail -F /tmp/iperf_h1.log   → drops to ~5 Mbps
     tail -F /tmp/iperf_h3.log   → ~5 Mbps
     tail -F {MB1_LOG} → SILENCE
     """)
 
-    # ── Phase 3 — bandwidth contract (queue on s1-s2) ─────────────────────────
+    # ── Phase 3 — alternate path via r1 ──────────────────────────────────────
 
-    input("[ Press ENTER ] ▶  PHASE 3: Provision premium slice (path + bandwidth)")
+    input("[ Press ENTER ] ▶  PHASE 3: Provision alternate-path slice via r1")
     print()
     stop_all(h1, h3, h2)
-    sc.provision("premium", src="h1", dst="h2", chain=["mb1"], bw=8)
+    sc.provision("express", src="h1", dst="h2", chain=["r1", "mb1"], bw=0)
     sc.status()
     start_servers(h2)
     time.sleep(0.5)
@@ -107,26 +111,27 @@ Terminals to open:
     time.sleep(0.5)
     start_client(h3, h2.IP(), mbps=8, port=H3_PORT, tag="h3")
     print(f"""
-  Phase 3 — Premium slice ACTIVE (s1-s2 path)
-  ─────────────────────────────────────────────
-  ┌─────────────────────────────────────────────────────────┐
-  │  Path contract:      h1 → mb1 → h2   (SRv6)             │
-  │  Bandwidth contract: 8 Mbps guaranteed (OVS HTB queue)  │
-  └─────────────────────────────────────────────────────────┘
+  Phase 3 — Alternate-path slice ACTIVE
+  ───────────────────────────────────────
+  ┌────────────────────────────────────────────────────────┐
+  │  Path contract:      h1 → r1 → mb1 → h2   (SRv6)      │
+  │  Bandwidth contract: none (best-effort, bw=0)         │
+  └────────────────────────────────────────────────────────┘
 
-  h1 still uses the s1-s2 link but its queue is protected.
+  h1 bypasses the slow s1-s2 bottleneck through r1.
+  h3 stays on the direct link, so the flows stop competing.
 
     tail -F /tmp/iperf_h1.log   → recovers to ~8 Mbps
-    tail -F /tmp/iperf_h3.log   → squeezed to ~2 Mbps
+    tail -F /tmp/iperf_h3.log   → recovers to ~8 Mbps
     tail -F {MB1_LOG} → SHOWS TRAFFIC
     """)
 
     # ── Phase 4 — teardown ────────────────────────────────────────────────────
 
-    input("[ Press ENTER ] ▶  PHASE 4: Teardown slice")
+    input("[ Press ENTER ] ▶  PHASE 4: Teardown alternate-path slice")
     print()
     stop_all(h1, h3, h2)
-    sc.teardown("premium")
+    sc.teardown("express")
     sc.status()
     start_servers(h2)
     time.sleep(0.5)
@@ -136,9 +141,9 @@ Terminals to open:
     print(f"""
   Phase 4 — Slice torn down
   ───────────────────────────
-  Queue removed. SRv6 route removed. Both back to best-effort on s1-s2.
+  h1 falls back to the direct s1-s2 path, so both flows share the bottleneck again.
 
-    tail -F /tmp/iperf_h1.log   → drops to ~5 Mbps
+    tail -F /tmp/iperf_h1.log   → drops back to ~5 Mbps
     tail -F /tmp/iperf_h3.log   → ~5 Mbps
     tail -F {MB1_LOG} → SILENT
     """)

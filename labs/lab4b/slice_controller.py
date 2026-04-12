@@ -10,6 +10,8 @@ Adapted from Lab 4 for use with ONOS-controlled switches:
     as its own rules and will not evict them during flow reconciliation
   - SRv6 setup uses on-link routes instead of static neighbours; ONOS handles
     neighbour discovery via reactive forwarding with ipv6Forwarding=true
+  - Provisioning an SRv6 slice installs both the forward route and the
+    matching reverse route automatically
   - r1 (dual-homed SRv6 router) has two SIDs: fc00::a1 on eth0 (s1-facing)
     and fc00::a2 on eth1 (s2-facing); configure_srv6() handles it specially
   - h3 is on s1, so r1's routing table includes fc00::3 via eth0
@@ -98,6 +100,14 @@ class SliceController:
                       Use "r1" for the s1-facing SID, "r1b" for s2-facing.
         bw    : float Guaranteed bandwidth in Mbps on s1-s2 (0 = best-effort)
 
+        Notes
+        -----
+        If chain is non-empty, the controller installs:
+          - a forward SRv6 route on src toward dst
+          - a reverse SRv6 route on dst toward src
+        The reverse chain is derived automatically by reversing the forward
+        chain and swapping r1 <-> r1b where needed.
+
         Raises
         ------
         SliceError      if name already exists or hosts are invalid
@@ -129,11 +139,18 @@ class SliceController:
             print(f"  [queue]  queue_id={queue_id}, {bw} Mbps guaranteed")
 
         segments = []
+        reverse_chain = []
+        reverse_segments = []
         if chain:
             segments = self._build_segments(chain, dst)
             self._install_srv6_route(src_host, dst_host.IP(), segments)
-            print(f"  [SRv6]   {src} → {' → '.join(chain)} → {dst}")
-            print(f"  [SRv6]   segments: {' → '.join(segments)}")
+            reverse_chain = self._build_reverse_chain(chain)
+            reverse_segments = self._build_segments(reverse_chain, src)
+            self._install_srv6_route(dst_host, src_host.IP(), reverse_segments)
+            print(f"  [SRv6]   forward: {src} → {' → '.join(chain)} → {dst}")
+            print(f"  [SRv6]   fwd segs: {' → '.join(segments)}")
+            print(f"  [SRv6]   reverse: {dst} → {' → '.join(reverse_chain)} → {src}")
+            print(f"  [SRv6]   rev segs: {' → '.join(reverse_segments)}")
 
         for waypoint in chain:
             self._start_logger(waypoint)
@@ -146,6 +163,8 @@ class SliceController:
             "queue_id": queue_id,
             "flow_id":  flow_id,
             "segments": segments,
+            "reverse_chain": reverse_chain,
+            "reverse_segments": reverse_segments,
         }
 
         print(f"[SliceController] Slice '{name}' provisioned ✓\n")
@@ -163,7 +182,8 @@ class SliceController:
 
         if s["segments"]:
             self._remove_srv6_route(src_host, dst_host.IP())
-            print(f"  [SRv6]   route removed from {s['src']}")
+            self._remove_srv6_route(dst_host, src_host.IP())
+            print(f"  [SRv6]   routes removed from {s['src']} and {s['dst']}")
 
         if s["queue_id"] is not None:
             self._remove_queue_flow(s["flow_id"])
@@ -196,11 +216,16 @@ class SliceController:
                 bw_str    = f"{s['bw']} Mbps" if s["bw"] > 0 else "best-effort"
                 print(f"  [{name}]")
                 print(f"    path:      {s['src']} → {chain_str} → {s['dst']}")
+                if s["reverse_chain"]:
+                    reverse_chain_str = " → ".join(s["reverse_chain"])
+                    print(f"    reverse:   {s['dst']} → {reverse_chain_str} → {s['src']}")
                 print(f"    bandwidth: {bw_str}")
                 if s["queue_id"]:
                     print(f"    queue_id:  {s['queue_id']}")
                 if s["segments"]:
-                    print(f"    segments:  {' → '.join(s['segments'])}")
+                    print(f"    fwd segs:  {' → '.join(s['segments'])}")
+                if s["reverse_segments"]:
+                    print(f"    rev segs:  {' → '.join(s['reverse_segments'])}")
         print()
 
     def teardown_all(self):
@@ -431,6 +456,13 @@ class SliceController:
 
     def _build_segments(self, chain, dst):
         return [SID[wp] for wp in chain] + [SID[dst]]
+
+    def _build_reverse_chain(self, chain):
+        reverse_map = {
+            "r1": "r1b",
+            "r1b": "r1",
+        }
+        return [reverse_map.get(waypoint, waypoint) for waypoint in reversed(chain)]
 
     def _install_srv6_route(self, src_host, dst_ip, segments):
         segs = ",".join(segments)

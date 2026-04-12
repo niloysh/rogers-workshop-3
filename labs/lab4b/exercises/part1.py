@@ -3,7 +3,7 @@
 Exercise 1 — Transport Slice Provisioning
 ==========================================
 
-You have seen the demo provision a premium slice through mb1 via r1.
+You have seen the direct-path demo provision a premium slice through mb1.
 Your task: provision a slice that visits mb2 instead, with 6 Mbps guaranteed.
 
 Both mb1 and mb2 loggers will be running — only one should light up.
