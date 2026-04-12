@@ -43,7 +43,7 @@
         volumes:
           - "onos_data:/root/onos/apache-karaf-4.2.14/data"
         env:
-          ONOS_APPS: "drivers,openflow,fwd,segmentrouting,tunnel"
+          ONOS_APPS: "drivers,openflow,fwd,proxyarp,segmentrouting,tunnel"
 
     - name: Wait for ONOS REST API
       ansible.builtin.uri:
@@ -69,6 +69,32 @@
       loop:
         - org.onosproject.openflow
         - org.onosproject.fwd
+        - org.onosproject.proxyarp
+
+    - name: Configure ONOS reactive forwarding for IPv6
+      ansible.builtin.uri:
+        url: "http://localhost:8181/onos/v1/configuration/org.onosproject.fwd.ReactiveForwarding?preset=true"
+        method: POST
+        user: onos
+        password: rocks
+        force_basic_auth: true
+        body_format: json
+        body:
+          ipv6Forwarding: "true"
+        status_code: 200
+
+    - name: Verify ONOS reactive forwarding IPv6 config
+      ansible.builtin.uri:
+        url: "http://localhost:8181/onos/v1/configuration/org.onosproject.fwd.ReactiveForwarding"
+        method: GET
+        user: onos
+        password: rocks
+        force_basic_auth: true
+        status_code: 200
+      register: onos_fwd_config
+      retries: 10
+      delay: 1
+      until: onos_fwd_config.json['org.onosproject.fwd.ReactiveForwarding'].ipv6Forwarding == 'true'
 
     - name: Print ONOS access info
       ansible.builtin.debug:

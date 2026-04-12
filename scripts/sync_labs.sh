@@ -1,1 +1,0 @@
-rsync -avz --delete labs/ ws3:~/labs/

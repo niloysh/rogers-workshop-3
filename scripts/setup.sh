@@ -25,6 +25,21 @@ die() {
   exit 1
 }
 
+user_in_group() {
+  local user="$1" group="$2"
+  id -nG "${user}" 2>/dev/null | tr ' ' '\n' | grep -qx "${group}"
+}
+
+print_docker_access_notes() {
+  if [[ "${DOCKER_GROUP_WAS_PRESENT}" -eq 1 ]]; then
+    echo "  - Docker group already present for ${WORKSHOP_USER}"
+    return
+  fi
+
+  echo "  - Docker access was added for ${WORKSHOP_USER}"
+  echo "  - Log out and log back in before using Docker as a regular user"
+}
+
 APT_INSTALL_OPTS=(
   -y
   -o Dpkg::Options::=--force-confdef
@@ -103,6 +118,45 @@ pip_install() {
     pip_args+=(--break-system-packages)
   fi
   ${SUDO} python3 -m pip install "${pip_args[@]}" "$@"
+}
+
+onos_api() {
+  curl -fsS -u onos:rocks "$@"
+}
+
+onos_activate_app() {
+  local app="$1"
+  onos_api -X POST "http://localhost:8181/onos/v1/applications/${app}/active" >/dev/null
+}
+
+onos_configure_component() {
+  local component="$1" payload="$2" status body_file
+  body_file="$(mktemp)"
+  status="$(curl -sS -u onos:rocks \
+    -o "${body_file}" \
+    -w '%{http_code}' \
+    -X POST \
+    -H "Content-Type: application/json" \
+    "http://localhost:8181/onos/v1/configuration/${component}?preset=true" \
+    -d "${payload}")"
+
+  case "${status}" in
+    200|204)
+      rm -f "${body_file}"
+      return 0
+      ;;
+    *)
+      cat "${body_file}" >&2 || true
+      rm -f "${body_file}"
+      return 1
+      ;;
+  esac
+}
+
+onos_component_property_equals() {
+  local component="$1" property="$2" expected="$3"
+  onos_api "http://localhost:8181/onos/v1/configuration/${component}" | \
+    grep -Fq "\"${property}\":\"${expected}\""
 }
 
 srv6_supported() {
@@ -193,6 +247,11 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=a
 
+DOCKER_GROUP_WAS_PRESENT=0
+if user_in_group "${WORKSHOP_USER}" docker; then
+  DOCKER_GROUP_WAS_PRESENT=1
+fi
+
 log "Pre-seeding package configuration for unattended install"
 echo "wireshark-common wireshark-common/install-setuid boolean true" | ${SUDO} debconf-set-selections
 echo "iperf3 iperf3/start_daemon boolean false" | ${SUDO} debconf-set-selections
@@ -269,8 +328,12 @@ ${SUDO} systemctl enable --now openvswitch-switch
 ${SUDO} systemctl stop openvswitch-testcontroller >/dev/null 2>&1 || true
 ${SUDO} systemctl disable openvswitch-testcontroller >/dev/null 2>&1 || true
 
-log "Adding ${WORKSHOP_USER} to docker group"
-${SUDO} usermod -aG docker "${WORKSHOP_USER}"
+if [[ "${DOCKER_GROUP_WAS_PRESENT}" -eq 1 ]]; then
+  log "${WORKSHOP_USER} is already in docker group"
+else
+  log "Adding ${WORKSHOP_USER} to docker group"
+  ${SUDO} usermod -aG docker "${WORKSHOP_USER}"
+fi
 
 log "Configuring SRv6 sysctls"
 write_srv6_sysctl_file
@@ -306,14 +369,14 @@ if [[ "${INSTALL_ONOS}" == "1" ]]; then
       -p 8181:8181 \
       -p 9876:9876 \
       -v onos_data:/root/onos/apache-karaf-4.2.14/data \
-      -e ONOS_APPS=drivers,openflow,fwd,segmentrouting,tunnel \
+      -e ONOS_APPS=drivers,openflow,fwd,proxyarp,segmentrouting,tunnel \
       "onosproject/onos:${ONOS_VERSION}" >/dev/null
   fi
 
   log "Waiting for ONOS REST API"
   ready=0
   for _ in $(seq 1 40); do
-    if curl -fsS -u onos:rocks http://localhost:8181/onos/v1/applications >/dev/null 2>&1; then
+    if onos_api http://localhost:8181/onos/v1/applications >/dev/null 2>&1; then
       ready=1
       break
     fi
@@ -324,10 +387,34 @@ if [[ "${INSTALL_ONOS}" == "1" ]]; then
     warn "ONOS did not become ready in time; check: sudo docker logs onos"
   else
     log "Activating ONOS apps"
-    curl -fsS -u onos:rocks -X POST \
-      http://localhost:8181/onos/v1/applications/org.onosproject.openflow/active >/dev/null || true
-    curl -fsS -u onos:rocks -X POST \
-      http://localhost:8181/onos/v1/applications/org.onosproject.fwd/active >/dev/null || true
+    for app in \
+      org.onosproject.openflow \
+      org.onosproject.fwd \
+      org.onosproject.proxyarp; do
+      onos_activate_app "${app}" || warn "failed to activate ONOS app: ${app}"
+    done
+
+    log "Configuring ONOS reactive forwarding for IPv6"
+    onos_configure_component \
+      org.onosproject.fwd.ReactiveForwarding \
+      '{"ipv6Forwarding":"true"}' \
+      || warn "failed to request org.onosproject.fwd.ReactiveForwarding ipv6Forwarding=true"
+
+    configured=0
+    for _ in $(seq 1 10); do
+      if onos_component_property_equals \
+        org.onosproject.fwd.ReactiveForwarding \
+        ipv6Forwarding \
+        true; then
+        configured=1
+        break
+      fi
+      sleep 1
+    done
+
+    if [[ "${configured}" != "1" ]]; then
+      warn "ONOS fwd ipv6Forwarding did not become true; check: onos> cfg get org.onosproject.fwd.ReactiveForwarding"
+    fi
   fi
 fi
 
@@ -344,7 +431,7 @@ Workshop setup complete.
 
 Key notes:
   - User configured: ${WORKSHOP_USER}
-  - Docker group membership may require log out / log back in
+$(print_docker_access_notes)
   - ONOS REST API: http://localhost:8181/onos/v1/  (onos / rocks)
   - ONOS CLI:      ssh -p 8101 -o HostKeyAlgorithms=+ssh-rsa onos@localhost
 
