@@ -31,9 +31,18 @@ layout: page
 .materials-link.available:hover{background:#1a1917;color:#fff;border-color:#1a1917}
 .materials-link svg{width:12px;height:12px;flex-shrink:0;vertical-align:middle}
 .quick-links{margin-top:32px;padding-top:24px;border-top:1px solid #e4e2da}
-.quick-links-grid{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.quick-link{font-size:13px;color:#6b6860;text-decoration:none;padding:5px 11px;border-radius:5px;border:1px solid #e4e2da;background:white}
-.quick-link:hover{border-color:#6b6860;color:#1a1917}
+.quick-links-intro{font-size:14px;color:#6b6860;line-height:1.7;margin:0 0 14px}
+.quick-links-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.quick-link{display:block;text-decoration:none;padding:16px 18px;border-radius:8px;border-left:3px solid #e4e2da;border-top:1px solid #e4e2da;border-right:1px solid #e4e2da;border-bottom:1px solid #e4e2da;background:#faf9f6;transition:transform .12s ease,border-color .12s ease,background .12s ease,box-shadow .12s ease}
+.quick-link:hover{transform:translateY(-1px);border-left-color:#6b6860;border-top-color:#d5d1c6;border-right-color:#d5d1c6;border-bottom-color:#d5d1c6;background:white;box-shadow:0 6px 16px rgba(26,25,23,.05)}
+.quick-link-title{display:block;font-size:14px;font-weight:600;color:#1a1917;margin-bottom:6px}
+.quick-link-desc{display:block;font-size:13px;color:#6b6860;line-height:1.55}
+.quick-link.setup{border-left-color:#4a3f8f;background:#eeedf8}
+.quick-link.setup .quick-link-title{color:#4a3f8f}
+.quick-link.reference{border-left-color:#1a6b57;background:#e4f2ed}
+.quick-link.reference .quick-link-title{color:#1a6b57}
+.quick-link.feedback{border-left-color:#7a6a2e;background:#f5f0e0}
+.quick-link.feedback .quick-link-title{color:#7a6a2e}
 @media(max-width:600px){.schedule-row{grid-template-columns:52px 1fr 52px}.schedule-block{padding:12px 14px}}
 </style>
 
@@ -193,5 +202,23 @@ In this third workshop, we turn our attention to the transport network, which in
 
 ## Quick Links
 
-- [Learning outcomes](learning-outcomes)
-- [Workshop feedback](https://docs.google.com/forms/d/e/1FAIpQLSeeYKe7PKKg0iLa_khv73pAFY2ke9KzenRFFz9bPcBhUPJ8mQ/viewform?usp=header)
+<p class="quick-links-intro">Start with setup, keep the workshop references nearby, and use the feedback form at the end of the session.</p>
+
+<div class="quick-links-grid">
+  <a class="quick-link setup" href="setup">
+    <span class="quick-link-title">Workshop setup</span>
+    <span class="quick-link-desc">Setup instructions for the bootstrap script, including when to run it and what it prepares.</span>
+  </a>
+  <a class="quick-link reference" href="linux-commands">
+    <span class="quick-link-title">Basic Linux commands</span>
+    <span class="quick-link-desc">A compact reference for the shell, Mininet, ONOS, and OVS commands used in the labs.</span>
+  </a>
+  <a class="quick-link reference" href="learning-outcomes">
+    <span class="quick-link-title">Learning outcomes</span>
+    <span class="quick-link-desc">See what participants should understand and be able to do by the end of Workshop 3.</span>
+  </a>
+  <a class="quick-link feedback" href="https://docs.google.com/forms/d/e/1FAIpQLSeeYKe7PKKg0iLa_khv73pAFY2ke9KzenRFFz9bPcBhUPJ8mQ/viewform?usp=header">
+    <span class="quick-link-title">Workshop feedback</span>
+    <span class="quick-link-desc">Share comments and suggestions after the session.</span>
+  </a>
+</div>
