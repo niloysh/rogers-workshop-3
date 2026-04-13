@@ -8,8 +8,7 @@ paginate: true
 
 <span class="tag">Lab 2</span>
 
-# Controller-Based Connectivity
-# with ONOS
+# Network Programmability with ONOS
 
 Rogers Executive Workshop 3 — Transport Network
 
@@ -19,7 +18,7 @@ Rogers Executive Workshop 3 — Transport Network
 
 # Getting Started
 
-Connecting Mininet to ONOS
+Connecting the programmable network to an SDN controller
 
 ---
 
@@ -27,13 +26,13 @@ Connecting Mininet to ONOS
 
 In this lab you will:
 
-- connect a triangle topology to ONOS
-- explore devices, links, hosts, and flows from the ONOS CLI
-- query ONOS from Python through the REST API
-- add and remove flow rules through the ONOS REST API
-- build a small controller-side app that reacts to link failure
+- Connect a network topology created using Mininet to the ONOS SDN controller
+- Explore devices, links, hosts, and flows from the ONOS CLI
+- Query ONOS from Python through the REST API
+- Add and remove flow rules through the ONOS REST API
+- Build a small controller-side app that reacts to link failure
 
-<blockquote class="info">In Lab 1, you were the control plane. In Lab 2, ONOS is — watch how it discovers the network, installs rules, and recovers from failure without you touching a switch.</blockquote>
+<blockquote class="info">In Lab 1, you programmed the SDN data plane manually, one switch at a time, using <code>ovs-ofctl</code> commands. In Lab 2, the ONOS SDN controller allows easily programming multiple switches using higher-level abstractions.</blockquote>
 
 ---
 
@@ -66,7 +65,7 @@ ONOS (Open Network Operating System) is an open-source SDN controller built for 
 
 ---
 
-# Triangle topology
+# The Triangle topology used in Lab 2
 
 <div class="topology-figure compact">
   <img src="../../assets/figures/triangle-topology.svg" alt="Triangle topology with hosts h1, h2, h3, and switches s1, s2, s3." />
@@ -92,14 +91,14 @@ ONOS (Open Network Operating System) is an open-source SDN controller built for 
 
 Then open **four fresh terminals** and `cd ~/labs/lab2` in each:
 
-| Terminal | Purpose                                               |
-| -------- | ----------------------------------------------------- |
-| 1        | Mininet CLI                                           |
-| 2        | ONOS CLI                                              |
-| 3        | Jupyter notebook (walkthrough + exercise)             |
-| 4        | `ovs-ofctl` and shell verification                    |
+| Terminal | Purpose                                   |
+| -------- | ----------------------------------------- |
+| 1        | Mininet CLI                               |
+| 2        | ONOS CLI                                  |
+| 3        | Jupyter notebook (walkthrough + exercise) |
+| 4        | `ovs-ofctl` and shell verification        |
 
-<blockquote class="warning">Leftover Mininet state from Lab 1 will break Lab 2. <code>sudo mn -c</code> is not optional.</blockquote>
+<blockquote class="warning">Leftover Mininet state can conflict with new runs. Please remember to run <code>sudo mn -c</code> to clean up after every Mininet run is complete.</blockquote>
 
 ---
 
@@ -176,7 +175,7 @@ Now check for hosts:
 onos> hosts
 ```
 
-The list is empty — ONOS has never seen a packet from any host yet. Trigger host discovery from Mininet (terminal 1):
+The list is either empty or shows hosts with just ipv6 address. ONOS has not yet seen an ipv4 packet from any host yet. Trigger host discovery from Mininet (terminal 1):
 
 ```text
 mininet> pingall
@@ -188,15 +187,15 @@ Check hosts again:
 onos> hosts
 ```
 
-All three hosts now appear. ONOS learned them by observing the first packet from each one.
+All three hosts now appear with ipv4 addresses e.g., `10.0.0.1`. ONOS learned them by observing the first packet from each one. 
 
 ---
 
 <!-- _class: compact -->
 
-# ONOS wrote the rules — you didn't
+# How do pings work without us writing flow rules?
 
-From the ONOS CLI (terminal 2), look at what `fwd` installed:
+From the ONOS CLI (terminal 2), look at what the `fwd` appliction installed:
 
 ```text
 onos> flows
@@ -209,7 +208,7 @@ id=4200000baf0cae, state=ADDED, bytes=98, packets=1, duration=2,
   treatment=[OUTPUT:3]
 ```
 
-You can also verify directly on the switch — just like in Lab 1 (terminal 4):
+You can also verify these rules directly on the switch — just like in Lab 1 (terminal 4):
 
 ```bash
 sudo ovs-ofctl dump-flows s1 -O OpenFlow13
@@ -220,7 +219,7 @@ cookie=0x4200003f9f0001, priority=10,in_port="s1-eth1",
   dl_src=00:00:00:00:00:01,dl_dst=00:00:00:00:00:02 actions=output:"s1-eth2"
 ```
 
-Both views show the same rules. If either is empty, the rules timed out — run `pingall` from Mininet and check again immediately.
+Both views show the same rules. If either is empty, the rules likely timed out (ONOS uses a default 10s timeout for flow-rules) — run `pingall` from Mininet and check again immediately.
 
 ---
 
@@ -228,7 +227,7 @@ Both views show the same rules. If either is empty, the rules timed out — run 
 
 # REST API
 
-Inspect ONOS state and program the network from your own code
+Interact with ONOS using higher-level APIs and writing our own applications
 
 ---
 
@@ -238,8 +237,8 @@ Inspect ONOS state and program the network from your own code
 
 In terminal 3 (inside `~/labs/lab2/`):
 
-- run `jupyter notebook`
-- when Jupyter opens in your browser, open `rest_walkthrough.ipynb`
+- run `jupyter notebook`; click on the link that pops up
+- when Jupyter opens in your browser (FireFox), open `rest_walkthrough.ipynb`
 - keep Mininet and ONOS CLI running in terminals 1 and 2
 - do not run this inside `mininet>` or `onos>`
 - run each cell in order and read the output before moving on
@@ -266,7 +265,7 @@ Open `exercises/exercise.ipynb` in Jupyter. You will complete a notebook that ac
 - monitors for link failure
 - recomputes and reinstalls rules after a failure
 
-<blockquote class="tip">The helpers are provided — your job is to wire them together in four short parts.</blockquote>
+<blockquote class="tip">The helpers are already provided.  Your job is to wire them together in four short parts.</blockquote>
 
 ---
 
@@ -298,9 +297,9 @@ In Part 4, make sure you save the return value of `reroute_once(...)` back into 
 
 In this lab you:
 
-- connected Mininet to ONOS and observed automatic topology discovery
-- explored the network from both the ONOS CLI and the REST API
-- added and removed flow rules through the ONOS REST API
-- completed a notebook controller that detects link failure and reroutes via the REST API
+- Connected a network topology created using Mininet to the ONOS SDN controller and observed automatic topology discovery
+- Explored the network from both the ONOS CLI and the REST API
+- Added and removed flow rules through the ONOS REST API
+- Used ONOS high-level APIs to create an SDN controller application
 
-<blockquote class="info">Lab 3 keeps the goal of programmable forwarding, but changes how the path is expressed: with SRv6, the route is carried in the packet itself as a segment list.</blockquote>
+<blockquote class="info">Next, in Lab 3 we still look at programmable forwarding, but change how the path is expressed: instead of OpenFlow rules, we look at programmable forwarding using SRv6, where the route is carried in the packet itself as a segment list.</blockquote>

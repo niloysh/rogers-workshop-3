@@ -8,8 +8,7 @@ paginate: true
 
 <span class="tag">Lab 4</span>
 
-# Putting it all together
-# Transport Slicing
+# Putting it all together: Transport Slicing
 
 Rogers Executive Workshop 3 — Transport Network
 
@@ -19,7 +18,7 @@ Rogers Executive Workshop 3 — Transport Network
 
 # Getting Started
 
-What this lab teaches and how to work through it
+Connecting the ideas from Labs 1 through 3
 
 ---
 
@@ -60,6 +59,8 @@ In this lab you will:
 
 <blockquote class="info">The request is new. The underlying ingredients are the same ones you already used in the earlier labs.</blockquote>
 
+<blockquote class="tip">The transport slice controller code is in the <code>_internal</code> directory. If you are curious, check out how it uses the mechanims from Labs 1 through 3. Note that you do not need edit or change it.</blockquote>
+
 ---
 
 # Lab 4 topology
@@ -83,7 +84,7 @@ Its log lighting up confirms traffic really took the requested waypoint.
 Inspects the inner flow and reports `[OK]` or `[ALERT]`.
 
 
-<blockquote class="tip">The middlebox logs are part of the lesson. If a log lights up, the slice's waypoint requirement is being realized.</blockquote>
+<blockquote class="tip">The middlebox logs are useful to check if traffic is flowing through the chain. If a log lights up, the slice's waypoint requirement is being realized.</blockquote>
 
 ---
 
@@ -177,9 +178,12 @@ From `~/labs/lab4`:
 sudo python3 demo/run.py
 ```
 
-The demo uses a **fixed** request in `demo/slice_request.py` — you will be asked to open and read it, but not edit it.
+The demo uses a **fixed** request in `demo/slice_request.py` — you will be asked to open and read it; **do not edit** it.
 
 The runner walks through four phases and pauses at each one. Follow along in the log files.
+
+<blockquote class="tip">If you are familiar with <code>tmux</code>, it can be useful to manage the different terminals; however it is strictly optional.</blockquote>
+
 
 ---
 
@@ -310,7 +314,7 @@ Lab 4 is where Labs 1–3 come together to illustrate the **concepts** behind si
 - **Lab 2** — an SDN controller translates one service request into concrete switch rules
 - **Lab 3** — SRv6 steers traffic onto the right path and through the right waypoints
 
-A single request expressing a path objective, a service chain, and a bandwidth guarantee — and a controller that realizes it.
+A single request expressing a path objective, a service chain, and a bandwidth guarantee and a transport slice controller that realizes it.
 
 ---
 
@@ -324,8 +328,8 @@ A single request expressing a path objective, a service chain, and a bandwidth g
 
 Across the workshop, you:
 
-- learned how SDN enables programmable and automated transport networks
-- worked hands-on with the key enablers: OVS, Mininet, ONOS, and SRv6
-- saw how those pieces come together in a simplified transport slice controller
+- learned how SDN enables programmable and flexible transport networks
+- worked hands-on with the key enablers such as OVS, Mininet, ONOS, and SRv6
+- saw how those pieces can come together in a simplified transport slice controller
 
-Congratulations on completing Workshop 3: Transport Networks.
+Congratulations on completing Workshop 3: Transport Networks!

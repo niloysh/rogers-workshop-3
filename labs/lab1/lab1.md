@@ -8,8 +8,7 @@ paginate: true
 
 <span class="tag">Lab 1</span>
 
-# Programmable Forwarding
-# with OVS + Mininet
+# SDN Data Plane Programmability
 
 Rogers Executive Workshop 3 — Transport Network
 
@@ -19,7 +18,7 @@ Rogers Executive Workshop 3 — Transport Network
 
 # Getting Started
 
-Mininet, OVS, and your first flow rules
+Mininet, OpenVSwitch, and the SDN data plane
 
 ---
 
@@ -27,12 +26,11 @@ Mininet, OVS, and your first flow rules
 
 In this lab you will:
 
-- start from Mininet's default topology
-- observe how OVS behaves with and without flow rules
-- install a few OpenFlow rules by hand
-- build a simple topology in Python
+- Create a programmable network using Mininet.
+- Observe how a software SDN switch (OpenVSwitch) can be programmed using OpenFlow
+- Understand how to express forwarding policies in the data plane using OpenFlow match-action rules
 
-<blockquote class="info">By the end, you should be able to read any flow rule and identify what it matches, what it does, and how to verify it fired.</blockquote>
+<blockquote class="info">By the end of this Lab, you should be able to understand how to program the SDN data plane using flexible OpenFlow match-action rules.</blockquote>
 
 ---
 
@@ -42,11 +40,13 @@ In this lab you will:
   <img src="../../assets/figures/sdn-and-openflow.png" alt="Diagram showing the relationship between software-defined networking and OpenFlow." />
 </div>
 
-- SDN separates the control plane from the data plane — the controller decides, the switch acts
-- OpenFlow is one way to express forwarding rules, but not the only one e.g., **SRv6** encodes the entire path in the packet header, so the source node acts as its own controller
+<br>
+
+- SDN separates the control plane from the data plane — the controller expresses policies and the switch acts accordingly
+
+- OpenFlow is one way to express forwarding policies, but not the only one. For example, in Lab3, we will see how SRv6 encodes the entire path in the packet header
 
 
-<blockquote class="info">Once you understand match → action, you can apply it to any programmable forwarding plane.</blockquote>
 
 ---
 
@@ -56,7 +56,7 @@ OVS is a software switch that runs on Linux and understands OpenFlow.
 
 - the **datapath** forwards packets at line rate
 - the **userspace daemon** manages configuration and communicates with controllers
-- in this lab, you program OVS directly from the terminal using `ovs-ofctl` and `ovs-vsctl`
+- in this lab, you program OVS directly from the terminal using `ovs-ofctl` commands.
 
 OVS is widely used in production environments:
 
@@ -64,7 +64,6 @@ OVS is widely used in production environments:
 - **cloud data centres** — hypervisors use OVS to connect VMs and enforce tenant isolation
 - **NFV platforms** — OVS provides the underlay fabric that ties virtualised network functions together
 
-<blockquote class="info">Think of OVS as the switch you are programming: the datapath is its hardware, and the terminal is your controller.</blockquote>
 
 ---
 
@@ -77,7 +76,7 @@ Mininet emulates a network topology on a single machine — hosts, switches, and
 - `sudo mn` starts a default topology: `h1 -- s1 -- h2`
 - the CLI lets you run commands on any node: `h1 ping h2`, `s1 ovs-ofctl dump-flows`
 
-<blockquote class="info">Mininet gives you the network; you decide how it forwards traffic.</blockquote>
+<blockquote class="info">Mininet gives you the programmable network; you decide how it forwards traffic using OpenFlow.</blockquote>
 
 ---
 
@@ -88,7 +87,7 @@ Mininet emulates a network topology on a single machine — hosts, switches, and
 - all Mininet and OVS commands require `sudo`
 - exit the Mininet CLI cleanly with `exit` or `Ctrl+D` — this tears down the topology properly
 
-<blockquote class="warning">If something looks broken, run <code>sudo mn -c</code> to clean up any leftover state before starting again.</blockquote>
+<blockquote class="warning">If something looks broken or you see <code>RTNETLINK answers: File exists</code>, then run <code>sudo mn -c</code> to clean up any leftover state before starting again.</blockquote>
 
 ---
 
@@ -102,7 +101,7 @@ Start the default topology: `sudo mn`
 
 Mininet creates two hosts (`h1`, `h2`) and one switch (`s1`) connected in a line, then drops you into the CLI: `mininet>`
 
-<blockquote class="info">Mininet also starts a default controller. That is what makes <code>s1</code> forward traffic before you install any rules.</blockquote>
+<blockquote class="note">Pay close attention to the switch ports and how they are connected to the hosts!</blockquote>
 
 ---
 
@@ -122,13 +121,13 @@ Run a command inside a specific host by prefixing its name:
 mininet> h1 ip addr show
 ```
 
-<blockquote class="info">Each host has its own interface (<code>h1-eth0</code>, etc.) because Mininet isolates hosts in separate Linux network namespaces, just like containers.</blockquote>
+<blockquote class="tip">The <code>net</code> command is extremely useful going forward. Pay close attention to the connections shown by the <code>net</code> command and map it to the figure shown in the previous slide. Do you see the switch ports and how they map to each host?</blockquote>
 
 ---
 
 # Test connectivity
 
-Ping between hosts and measure bandwidth:
+Now that we have the network up and running, ping between hosts and measure bandwidth:
 
 ```text
 mininet> h1 ping -c 3 h2   # ping h2 from h1
@@ -188,13 +187,13 @@ idle_timeout=0, ip, nw_src=10.0.0.1, nw_dst=10.0.0.2, actions=output:2
 
 # Mininet Python API
 
-Building topologies in code
+How to create flexible network topologies?
 
 ---
 
 # A simple topology in Python
 
-Make sure you are in `~/labs/lab1/`, then open `simple_topo.py` — two hosts connected to one switch:
+Make sure you are in `~/labs/lab1/`, then open `simple_topo.py`. This shows a simple network topology where two hosts connected to one switch:
 
 ```python
 h1 = net.addHost("h1", ip="10.0.0.1/24")
@@ -204,7 +203,9 @@ s1 = net.addSwitch("s1", cls=OVSSwitch, protocols="OpenFlow13")
 net.staticArp()
 ```
 
-**`staticArp()`** fills in each host's ARP table in advance — the switch never sees ARP broadcasts, so IP rules alone are enough to forward traffic.
+<blockquote class="note">To keep things simple, in the code above, we use <code>staticArp()</code> to fill in each host's ARP table in advance. Therefore, IP rules alone are enough to forward traffic.</blockquote>
+
+
 
 ---
 
@@ -216,31 +217,27 @@ From terminal 1 (inside `~/labs/lab1/`), start the topology:
 sudo python3 simple_topo.py
 ```
 
-From the Mininet CLI — connectivity fails because there are no rules yet:
+From the Mininet CLI, test pair-wise connectivity using `pingall`. You should see connectivity fail because there are no rules yet:
 
 ```text
 mininet> pingall     # all fail
 ```
 
-From **terminal 2**, inspect the empty flow table:
+Now, from **terminal 2**, inspect the flow table:
 
 ```bash
 sudo ovs-ofctl -O OpenFlow13 dump-flows s1
 ```
 
-The output is empty — no rules, no forwarding.
+The output should be empty — no rules, no forwarding.
 
 ---
 
 # Add flow rules
 
-<blockquote class="warning">All <code>ovs-ofctl</code> commands run in <strong>terminal 2</strong>, never from inside the Mininet CLI.</blockquote>
+<blockquote class="warning">Run <code>ovs-ofctl</code> commands from <strong>terminal 2</strong>, not from inside the Mininet CLI.</blockquote>
 
-Check which host is on which port, then install two rules:
-
-```text
-mininet> net  # use this to check the port mapping!
-```
+Install two rules:
 
 ```bash
 sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
@@ -249,11 +246,13 @@ sudo ovs-ofctl -O OpenFlow13 add-flow s1 \
   "idle_timeout=0,ip,nw_src=10.0.0.2,nw_dst=10.0.0.1,actions=output:1"
 ```
 
-From the Mininet CLI, verify:
+From the Mininet CLI, verify that h1 can now ping h2: `mininet> h1 ping -c 3 h2`  
 
-```text
-mininet> h1 ping -c 3 h2    # now works
-```
+
+<blockquote class="note">When adding flow-rules using <code>ovs-ofctl</code>, remember to use <code>-o OpenFlow13</code> for OpenFlow v1.3 and <code>idle_timeout=0</code> to make flow-rules permanent.
+
+Also note the output ports: recall that we can use the <code>net</code> command from the mininet CLI to figure out the port mappings!
+</blockquote>
 
 ---
 
@@ -387,11 +386,10 @@ Exit Mininet, run `sudo mn -c`, then restart the topology from `~/labs/lab1`.
 
 In this lab you:
 
-- observed that OVS drops all traffic without explicit rules
-- installed match + action rules and verified them with `dump-flows` counters
-- built a custom topology in Python with controlled bandwidth and delay
-- engineered selective connectivity — some paths allowed, some blocked
+- Learnt about OpenFlow match + action rules
+- Installed match + action rules on OpenVSwitch 
+- Expressed flexible forwarding policies (some paths allowed, some blocked) using SDN data plane programming
 
 <blockquote class="info">This is the core idea we build on in later labs: first you program forwarding directly; by Lab 4, a transport slice controller will take a higher-level request and realize it using the same underlying mechanisms.</blockquote>
 
-**Next in the schedule** is Concepts 2, where you will connect this hands-on work to the OpenFlow model, controllers, and intents. After that, Lab 2 moves from manual rules to controller-based connectivity with ONOS.
+**Next in the schedule** is Concepts 2, where you will learn about SDN controllers. After that, Lab 2 moves from manual rules used in this Lab to network programming with an SDN controller.

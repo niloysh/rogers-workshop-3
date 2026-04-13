@@ -18,16 +18,13 @@ Rogers Executive Workshop 3 — Transport Network
 
 In this lab you will:
 
-- establish baseline IPv6 reachability across the topology
-- use an SRv6 segment list to force traffic through two service waypoints before it reaches the destination
-- build the reverse service chain as an exercise
-- optionally, if time, use the same idea to move traffic onto a lower-latency alternate path
-
-<blockquote class="info">The core idea is SRv6 itself: the segment list expresses the path you want. In the main lab, that means service waypoints. If time permits, the optional extension uses the same idea to move traffic onto a lower-latency path.</blockquote>
+- Use SRv6 to force traffic through two service waypoints before it reaches the destination
+- Build the reverse service chain as an exercise
+- Use the same idea to move traffic onto a lower-latency alternate path
 
 ---
 
-# One forwarding check
+# IPv6 support in the forwarding fabric
 
 The switched fabric from Lab 2 is still providing the baseline forwarding underneath this lab. Because SRv6 creates an outer IPv6 packet, that baseline fabric must already carry IPv6 traffic correctly.
 
@@ -139,6 +136,9 @@ org.onosproject.openflow
 org.onosproject.fwd
 org.onosproject.proxyarp
 ```
+<br>
+
+If any of them are missing, activate them with `app activate org.onosproject.<app>`
 
 ---
 
@@ -218,7 +218,7 @@ ip -6 addr add <SID>/128 dev <iface>            # assign the SID that identifies
 
 # SRv6 SID map for this lab
 
-Think of the SIDs by role, not as a flat list:
+
 
 - End hosts:
   `h1 -> fc00::1`
@@ -293,7 +293,7 @@ Use SRv6 to force traffic through the waypoints
 
 # Baseline — confirm bypass before steering
 
-Start the services first:
+Start the services first as follows. Keep them running.
 
 ```bash
 # terminal 3
@@ -303,7 +303,7 @@ Start the services first:
 ./run_mb2_ids.sh
 ```
 
-Send a suspicious request before adding any route:
+Now, from the Mininet CLI in **terminal 1**, send a suspicious request from h1:
 
 ```text
 mininet> h1 curl http://10.0.0.2/malware
@@ -322,6 +322,10 @@ mininet> h1 ip route add 10.0.0.2 encap seg6 mode encap segs fc00::b1,fc00::b2,f
 ```
 
 The segment list is what makes the packet visit `mb1`, then `mb2`, then `h2`.
+
+<blockquote class="tip">Take a moment to pause and understand what the above line does. Go back to Slide 13, and check the SID map. You can check if the route has been added correctly by running <code>h1 ip route</code> from the Mininet CLI.</blockquote>
+
+<blockquote class="tip">If you find it helpful to open each host in a separate terminal, you can do so by using the given convenience script as follows: <code>enter_host.sh <host></code></blockquote>
 
 ---
 
@@ -350,6 +354,15 @@ mininet> h1 curl http://10.0.0.2/malware
 ```
 
 <blockquote class="tip">The segment list forced traffic through <code>mb1</code> and <code>mb2</code> before delivery to <code>h2</code>.</blockquote>
+
+<blockquote class="tip">You can also optionally start a packet capture on <code>mb1</code> as follows:
+<code>
+./enter_host.sh mb1
+tshark -i mb1-eth0
+</code>
+</blockquote>
+
+
 
 ---
 
