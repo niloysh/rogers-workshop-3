@@ -347,8 +347,6 @@ blockquote {
     color: var(--color-muted);
     font-size: 18px;
     line-height: 1.45;
-    display: grid;
-    gap: 10px;
 }
 
 blockquote::before {
@@ -360,6 +358,7 @@ blockquote::before {
     line-height: 1.1;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    margin-bottom: 10px;
 }
 
 blockquote > :last-child {

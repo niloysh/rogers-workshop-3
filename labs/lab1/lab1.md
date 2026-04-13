@@ -239,7 +239,7 @@ The output is empty — no rules, no forwarding.
 Check which host is on which port, then install two rules:
 
 ```text
-mininet> net
+mininet> net  # use this to check the port mapping!
 ```
 
 ```bash

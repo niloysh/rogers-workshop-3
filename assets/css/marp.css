@@ -178,8 +178,6 @@ blockquote {
     margin: 14px 0;
     color: var(--color-muted);
     font-size: 15px;
-    display: grid;
-    gap: 8px;
 }
 
 blockquote::before {
@@ -191,6 +189,7 @@ blockquote::before {
     letter-spacing: .08em;
     display: block;
     line-height: 1.1;
+    margin-bottom: 8px;
 }
 
 blockquote > :last-child {
