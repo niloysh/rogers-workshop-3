@@ -33,7 +33,7 @@ In this lab you will:
 - add and remove flow rules through the ONOS REST API
 - build a small controller-side app that reacts to link failure
 
-> **What to focus on** In Lab 1, you were the control plane. In Lab 2, ONOS is — watch how it discovers the network, installs rules, and recovers from failure without you touching a switch.
+<blockquote class="info">In Lab 1, you were the control plane. In Lab 2, ONOS is — watch how it discovers the network, installs rules, and recovers from failure without you touching a switch.</blockquote>
 
 ---
 
@@ -47,7 +47,7 @@ In this lab you will:
 - ONOS discovers the topology, learns where hosts are, computes paths, and installs the switch rules needed to realize connectivity.
 - When the topology changes, ONOS can update those rules again without you logging into each switch.
 
-> **What changes** The data plane is still realized by flow rules in the switches. What changes is the level of abstraction: instead of programming one device at a time, you work through a controller with a network-wide view.
+<blockquote class="info">The data plane is still realized by flow rules in the switches. What changes is the level of abstraction: instead of programming one device at a time, you work through a controller with a network-wide view.</blockquote>
 
 ---
 
@@ -76,7 +76,7 @@ ONOS (Open Network Operating System) is an open-source SDN controller built for 
 - ONOS picks one path per flow and installs rules only on that path
 - when a link fails, ONOS recomputes and pushes new rules on the surviving path
 
-> **The redundant paths are why rerouting works** — if there were only one path, a link failure would mean no connectivity.
+<blockquote class="tip">If there were only one path, a link failure would mean no connectivity. The redundant paths are why rerouting works.</blockquote>
 
 ---
 
@@ -99,7 +99,7 @@ Then open **four fresh terminals** and `cd ~/labs/lab2` in each:
 | 3        | Jupyter notebook (walkthrough + exercise)             |
 | 4        | `ovs-ofctl` and shell verification                    |
 
-> **Leftover Mininet state from Lab 1 will break Lab 2.** `sudo mn -c` is not optional.
+<blockquote class="warning">Leftover Mininet state from Lab 1 will break Lab 2. <code>sudo mn -c</code> is not optional.</blockquote>
 
 ---
 
@@ -266,7 +266,7 @@ Open `exercises/exercise.ipynb` in Jupyter. You will complete a notebook that ac
 - monitors for link failure
 - recomputes and reinstalls rules after a failure
 
-> **Key idea** The helpers are provided — your job is to wire them together in four short parts.
+<blockquote class="tip">The helpers are provided — your job is to wire them together in four short parts.</blockquote>
 
 ---
 
@@ -303,4 +303,4 @@ In this lab you:
 - added and removed flow rules through the ONOS REST API
 - completed a notebook controller that detects link failure and reroutes via the REST API
 
-> **Coming up** Lab 3 keeps the goal of programmable forwarding, but changes how the path is expressed: with SRv6, the route is carried in the packet itself as a segment list.
+<blockquote class="info">Lab 3 keeps the goal of programmable forwarding, but changes how the path is expressed: with SRv6, the route is carried in the packet itself as a segment list.</blockquote>

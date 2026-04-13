@@ -15,8 +15,12 @@
     --color-divider-bg: #eaf3ef;
     --color-independent: #8a4e16;
     --color-independent-bg: #fbf1e6;
+    --color-info: #2456c5;
+    --color-info-bg: #eaf2ff;
     --color-warn: #9a6700;
     --color-warn-bg: #fff6db;
+    --color-important: #b42358;
+    --color-important-bg: #fff0f5;
     --color-code-bg: #1f252b;
     --color-code-fg: #f4f7f9;
     --color-inline-code-bg: #e7ebef;
@@ -343,24 +347,69 @@ blockquote {
     color: var(--color-muted);
     font-size: 18px;
     line-height: 1.45;
+    display: grid;
+    gap: 10px;
 }
 
-blockquote strong {
-    display: inline-block;
+blockquote::before {
+    content: "Note";
+    display: block;
     color: var(--color-lab);
     font-size: 12px;
+    font-weight: 700;
+    line-height: 1.1;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    margin-right: 8px;
 }
 
-blockquote.warn {
+blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+blockquote.note::before {
+    content: "Note";
+}
+
+blockquote.warn,
+blockquote.warning {
     background: var(--color-warn-bg);
     border-left-color: var(--color-warn);
 }
 
-blockquote.warn strong {
+blockquote.warn::before,
+blockquote.warning::before {
+    content: "Warning";
     color: var(--color-warn);
+}
+
+blockquote.info {
+    background: var(--color-info-bg);
+    border-left-color: var(--color-info);
+}
+
+blockquote.info::before {
+    content: "Info";
+    color: var(--color-info);
+}
+
+blockquote.tip {
+    background: var(--color-surface);
+    border-left-color: var(--color-lab);
+}
+
+blockquote.tip::before {
+    content: "Tip";
+    color: var(--color-lab);
+}
+
+blockquote.important {
+    background: var(--color-important-bg);
+    border-left-color: var(--color-important);
+}
+
+blockquote.important::before {
+    content: "Important";
+    color: var(--color-important);
 }
 
 table {

@@ -33,7 +33,7 @@ In this lab you will:
 - ask for a low-latency path, a service chain, and an admissible bandwidth request
 - watch the controller realize each request automatically
 
-> **What to focus on** Nothing here is a new transport mechanism. Lab 4 puts together the ideas from Labs 1 to 3 behind one higher-level interface: you describe the slice you want, and the transport slice controller realizes it.
+<blockquote class="info">Nothing here is a new transport mechanism. Lab 4 puts together the ideas from Labs 1 to 3 behind one higher-level interface: you describe the slice you want, and the transport slice controller realizes it.</blockquote>
 
 ---
 
@@ -46,7 +46,7 @@ In this lab you will:
 - **Lab 3** added explicit path control. Traffic does not have to follow the default path; it can be steered through chosen waypoints and along a chosen route.
 - **Lab 4** turns those ideas into one abstraction: a **transport slice** is a service request that asks for both a path and a treatment.
 
-> **Putting it together** Nothing in this lab is conceptually new in the data plane. The transport slice controller is the "putting it together" piece: it takes the mechanisms you already used in Labs 1 to 3 and realizes them together from one higher-level request.
+<blockquote class="info">Nothing in this lab is conceptually new in the data plane. The transport slice controller is the "putting it together" piece: it takes the mechanisms you already used in Labs 1 to 3 and realizes them together from one higher-level request.</blockquote>
 
 ---
 
@@ -58,7 +58,7 @@ In this lab you will:
   <img src="../../assets/figures/lab4-controller-overview.svg" alt="High-level overview showing a slice request feeding the transport slice controller, which reuses the ideas from Labs 1 to 3 to realize a slice with a chosen path, chosen waypoints, and chosen treatment." />
 </div>
 
-> **High level** The request is new. The underlying ingredients are the same ones you already used in the earlier labs.
+<blockquote class="info">The request is new. The underlying ingredients are the same ones you already used in the earlier labs.</blockquote>
 
 ---
 
@@ -70,7 +70,7 @@ In this lab you will:
 
 `h1` source · `h2` destination · `h3` competing flow · `mb1` telemetry · `mb2` security · `r1` alternate-path router
 
-> **Key idea** The direct `s1→s2` path is slower and bandwidth-limited. The `r1` path is faster and uncongested, but ONOS does not choose it by default.
+<blockquote class="tip">The direct <code>s1→s2</code> path is slower and bandwidth-limited. The <code>r1</code> path is faster and uncongested, but ONOS does not choose it by default.</blockquote>
 
 ---
 # What the middleboxes do
@@ -81,9 +81,9 @@ Its log lighting up confirms traffic really took the requested waypoint.
 
 **`mb2` — security inspector**
 Inspects the inner flow and reports `[OK]` or `[ALERT]`.
-It gives Exercise 2 a clearly different service function from Exercise 1.
 
-> The middlebox logs are part of the lesson. If a log lights up, the slice's waypoint requirement is being realized.
+
+<blockquote class="tip">The middlebox logs are part of the lesson. If a log lights up, the slice's waypoint requirement is being realized.</blockquote>
 
 ---
 
@@ -102,7 +102,7 @@ SLICE_REQUEST = {
 }
 ```
 
-> **What changes in Lab 4 is the interface** You are not editing the queueing, ONOS, or SRv6 logic directly. You describe the slice you want in one request, and the controller realizes it using those same underlying mechanisms.
+<blockquote class="info">You are not editing the queueing, ONOS, or SRv6 logic directly. You describe the slice you want in one request, and the controller realizes it using those same underlying mechanisms.</blockquote>
 
 ---
 
@@ -122,7 +122,7 @@ Then work from:
 cd ~/labs/lab4
 ```
 
-> **Stay in `labs/lab4` for every command in this lab.**
+<blockquote class="warning">Stay in <code>labs/lab4</code> for every command in this lab.</blockquote>
 
 Make sure ONOS is running. As done previously, open the ONOS CLI from a new terminal using `ssh`:
 
@@ -189,21 +189,21 @@ The runner walks through four phases and pauses at each one. Follow along in the
 
 ---
 
-# How exercises work
+# Exercise workflow
 
 1. From `~/labs/lab4`, run:
    ```bash
-   sudo python3 exercises/partX/run.py
+   sudo python3 exercises/partX/run.py  # <-- replace X e.g, part1, part2, or part3
    ```
 2. The runner starts the network, configures SRv6, and starts traffic automatically — so you can **see the problem first**
 3. When the runner pauses, open `exercises/partX/slice_request.py` and edit the `SLICE_REQUEST` block
-4. Press ENTER — the runner reloads your file and validates it
+4. Press **Ctrl+S** to save `slice_request.py`, then press ENTER in the runner
 5. The slice is applied and you observe the effect
 6. The slice is torn down so you can see the behavior revert
 
 If a request is invalid or rejected, the runner prints the error and waits for you to edit and retry.
 
-> The file already contains the full schema with valid values for every field — you do not need to look anything up elsewhere.
+<blockquote class="warning">If the file is not saved yet, many editors show a small white dot in the tab. Save first with <code>Ctrl+S</code> or the runner will reuse the old request.</blockquote>
 
 ---
 
@@ -211,7 +211,7 @@ If a request is invalid or rejected, the runner prints the error and waits for y
 
 # Exercise 1 — Low-latency path
 
-> ⚠️ **Before starting:** `mininet> exit` → `sudo mn -c` → `cd ~/labs/lab4`
+<blockquote class="warning"><code>mininet&gt; exit</code> → <code>sudo mn -c</code> → <code>cd ~/labs/lab4</code></blockquote>
 
 **Goal:** ask for a lower-latency service from `h1` to `h2` while keeping the telemetry monitor in the chain.
 
@@ -221,7 +221,7 @@ The runner shows you contention first, then asks you to edit `exercises/part1/sl
 sudo python3 exercises/part1/run.py
 ```
 
-> Solution: `solutions/part1/slice_request.py`
+<blockquote class="note"><code>solutions/part1/slice_request.py</code></blockquote>
 
 Watch these logs:
 
@@ -238,7 +238,7 @@ tail -F /tmp/mb1_bandwidth.log
 
 # Exercise 2 — Service chain
 
-> ⚠️ **Before starting:** `mininet> exit` → `sudo mn -c` → `cd ~/labs/lab4`
+<blockquote class="warning"><code>mininet&gt; exit</code> → <code>sudo mn -c</code> → <code>cd ~/labs/lab4</code></blockquote>
 
 **Goal:** keep the standard path and best-effort bandwidth, but route traffic through both middleboxes in this order:
 
@@ -267,7 +267,7 @@ tail -F /tmp/mb2_security.log
 
 # Exercise 3 — Admission control
 
-> ⚠️ **Before starting:** `mininet> exit` → `sudo mn -c` → `cd ~/labs/lab4`
+<blockquote class="warning"><code>mininet&gt; exit</code> → <code>sudo mn -c</code> → <code>cd ~/labs/lab4</code></blockquote>
 
 The runner installs a fixed 8 Mbps slice for `h1`, then asks you to submit a competing request for `h3`. It retries until your request is admitted.
 
@@ -311,3 +311,21 @@ Lab 4 is where Labs 1–3 come together to illustrate the **concepts** behind si
 - **Lab 3** — SRv6 steers traffic onto the right path and through the right waypoints
 
 A single request expressing a path objective, a service chain, and a bandwidth guarantee — and a controller that realizes it.
+
+---
+
+<!-- _class: compact -->
+
+# You Completed Workshop 3: Transport Networks
+
+<div class="slide-figure compact">
+  <img src="../../assets/figures/success-meme.jpg" alt="Achievement unlocked meme used as a humorous finish to Lab 4." />
+</div>
+
+Across the workshop, you:
+
+- learned how SDN enables programmable and automated transport networks
+- worked hands-on with the key enablers: OVS, Mininet, ONOS, and SRv6
+- saw how those pieces come together in a simplified transport slice controller
+
+Congratulations on completing Workshop 3: Transport Networks.

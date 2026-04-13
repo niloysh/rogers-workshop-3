@@ -32,7 +32,7 @@ In this lab you will:
 - install a few OpenFlow rules by hand
 - build a simple topology in Python
 
-> **Goal** By the end, you should be able to read any flow rule and identify what it matches, what it does, and how to verify it fired.
+<blockquote class="info">By the end, you should be able to read any flow rule and identify what it matches, what it does, and how to verify it fired.</blockquote>
 
 ---
 
@@ -46,7 +46,7 @@ In this lab you will:
 - OpenFlow is one way to express forwarding rules, but not the only one e.g., **SRv6** encodes the entire path in the packet header, so the source node acts as its own controller
 
 
-> **The principle matters more than the protocol** — once you understand match → action, you can apply it to any programmable forwarding plane.
+<blockquote class="info">Once you understand match → action, you can apply it to any programmable forwarding plane.</blockquote>
 
 ---
 
@@ -64,7 +64,7 @@ OVS is widely used in production environments:
 - **cloud data centres** — hypervisors use OVS to connect VMs and enforce tenant isolation
 - **NFV platforms** — OVS provides the underlay fabric that ties virtualised network functions together
 
-> **Think of OVS as the switch you are programming** — the datapath is its hardware, the terminal is your controller.
+<blockquote class="info">Think of OVS as the switch you are programming: the datapath is its hardware, and the terminal is your controller.</blockquote>
 
 ---
 
@@ -77,7 +77,7 @@ Mininet emulates a network topology on a single machine — hosts, switches, and
 - `sudo mn` starts a default topology: `h1 -- s1 -- h2`
 - the CLI lets you run commands on any node: `h1 ping h2`, `s1 ovs-ofctl dump-flows`
 
-> **In this lab** Mininet gives you the network; you decide how it forwards traffic.
+<blockquote class="info">Mininet gives you the network; you decide how it forwards traffic.</blockquote>
 
 ---
 
@@ -88,7 +88,7 @@ Mininet emulates a network topology on a single machine — hosts, switches, and
 - all Mininet and OVS commands require `sudo`
 - exit the Mininet CLI cleanly with `exit` or `Ctrl+D` — this tears down the topology properly
 
-> **If something looks broken** run `sudo mn -c` to clean up any leftover state before starting again.
+<blockquote class="warning">If something looks broken, run <code>sudo mn -c</code> to clean up any leftover state before starting again.</blockquote>
 
 ---
 
@@ -102,7 +102,7 @@ Start the default topology: `sudo mn`
 
 Mininet creates two hosts (`h1`, `h2`) and one switch (`s1`) connected in a line, then drops you into the CLI: `mininet>`
 
-> **Note** Mininet also starts a default controller — this is what makes `s1` forward traffic before you install any rules.
+<blockquote class="info">Mininet also starts a default controller. That is what makes <code>s1</code> forward traffic before you install any rules.</blockquote>
 
 ---
 
@@ -122,7 +122,7 @@ Run a command inside a specific host by prefixing its name:
 mininet> h1 ip addr show
 ```
 
-> **What to notice** Each host has its own interface (`h1-eth0`, etc.) because Mininet isolates hosts in separate Linux network namespaces — just like containers.
+<blockquote class="info">Each host has its own interface (<code>h1-eth0</code>, etc.) because Mininet isolates hosts in separate Linux network namespaces, just like containers.</blockquote>
 
 ---
 
@@ -137,7 +137,7 @@ mininet> iperf h1 h2        # measure throughput between h1 and h2
 mininet> py h1.IP()         # inspect Mininet objects from the CLI
 ```
 
-> **Why it works** Pings succeed because Mininet starts with a default learning controller. In the next step, you will remove it — and see what happens when there are no forwarding rules.
+<blockquote class="info">Pings succeed because Mininet starts with a default learning controller. In the next step, you will remove it and see what happens when there are no forwarding rules.</blockquote>
 
 ---
 
@@ -164,7 +164,7 @@ Every flow rule has three parts:
 
 **Counter** — `n_packets` and `n_bytes` are updated automatically for every rule
 
-> **Think of it as a policy statement** — "if a packet looks like *this*, do *that*, and count how many times it happened."
+<blockquote class="info">Think of it as a policy statement: "if a packet looks like <em>this</em>, do <em>that</em>, and count how many times it happened."</blockquote>
 
 ---
 
@@ -180,7 +180,7 @@ idle_timeout=0, ip, nw_src=10.0.0.1, nw_dst=10.0.0.2, actions=output:2
 - **action** — `actions=output:2` forwards them out port 2
 - **`idle_timeout=0`** — rule never expires; without it OVS silently removes idle rules after ~10 s
 
-> Always include `idle_timeout=0` in every rule you install — you will see this in practice shortly.
+<blockquote class="warning">Always include <code>idle_timeout=0</code> in every rule you install. You will see this in practice shortly.</blockquote>
 
 ---
 
@@ -234,7 +234,7 @@ The output is empty — no rules, no forwarding.
 
 # Add flow rules
 
-> All `ovs-ofctl` commands run in **terminal 2** — never from inside the Mininet CLI.
+<blockquote class="warning">All <code>ovs-ofctl</code> commands run in <strong>terminal 2</strong>, never from inside the Mininet CLI.</blockquote>
 
 Check which host is on which port, then install two rules:
 
@@ -299,7 +299,7 @@ The topology is already built for you. See `~/labs/lab1/exercises/topology.py`.
 Your goal: make **h1 ↔ h2** work by adding exactly **two flow rules** using `ovs-ofctl` commands.
 h3 is connected but not used yet. Confirm port numbers with `net` in the Mininet CLI.
 
-> **Hint** Treat the two directions separately. In the exercise scripts, match `in_port`, `nw_src`, and `nw_dst` so each rule applies only to the traffic you intend.
+<blockquote class="tip">Treat the two directions separately. In the exercise scripts, match <code>in_port</code>, <code>nw_src</code>, and <code>nw_dst</code> so each rule applies only to the traffic you intend.</blockquote>
 
 ---
 
@@ -313,7 +313,7 @@ h3 is connected but not used yet. Confirm port numbers with `net` in the Mininet
 3. **Fill in the two `TODO` rules** in `exercises/part1/add_rules.sh`, then run: `sudo bash exercises/part1/add_rules.sh`
 4. **Verify:** `sudo python3 exercises/part1/verify.py`
 
-> **Stuck?** Compare with `solutions/part1/add_rules.sh`
+<blockquote class="note">Compare with <code>solutions/part1/add_rules.sh</code> if you get stuck.</blockquote>
 
 ---
 
@@ -343,7 +343,7 @@ Same topology. Extend your rules so:
 The h1 ↔ h2 rules from Exercise 1 are already pre-filled as a reference.  
 Add two more rules for h1 ↔ h3.
 
-> **Hint** You do not need an explicit `drop` rule for `h2 ↔ h3`. In OVS, packets that do not match any rule are dropped automatically.
+<blockquote class="tip">You do not need an explicit <code>drop</code> rule for <code>h2 ↔ h3</code>. In OVS, packets that do not match any rule are dropped automatically.</blockquote>
 
 ---
 
@@ -358,7 +358,7 @@ Keep the topology running from Exercise 1 — no restart needed.
 3. **Add a comment** in the script: why can't h2 reach h3?
 4. **Verify:** `sudo python3 exercises/part2/verify.py`
 
-> **Stuck?** Compare with `solutions/part2/add_rules.sh`
+<blockquote class="note">Compare with <code>solutions/part2/add_rules.sh</code> if you get stuck.</blockquote>
 
 ---
 
@@ -392,6 +392,6 @@ In this lab you:
 - built a custom topology in Python with controlled bandwidth and delay
 - engineered selective connectivity — some paths allowed, some blocked
 
-> **This is the core idea we build on in later labs** — first you will program forwarding directly; by Lab 4, a transport slice controller will take a higher-level request and realize it using the same underlying mechanisms.
+<blockquote class="info">This is the core idea we build on in later labs: first you program forwarding directly; by Lab 4, a transport slice controller will take a higher-level request and realize it using the same underlying mechanisms.</blockquote>
 
 **Next in the schedule** is Concepts 2, where you will connect this hands-on work to the OpenFlow model, controllers, and intents. After that, Lab 2 moves from manual rules to controller-based connectivity with ONOS.

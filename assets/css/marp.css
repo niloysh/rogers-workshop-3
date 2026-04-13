@@ -13,8 +13,12 @@
     --color-concepts-bg: #eeedf8;
     --color-independent: #7a4a1a;
     --color-independent-bg: #fdf6ee;
+    --color-info: #2159b5;
+    --color-info-bg: #eef4ff;
     --color-warn: #b07800;
     --color-warn-bg: #fef9ec;
+    --color-important: #a63a50;
+    --color-important-bg: #fff0f4;
     --color-code-bg: #f0f0eb;
     --color-code-fg: #1a1917;
 }
@@ -174,25 +178,78 @@ blockquote {
     margin: 14px 0;
     color: var(--color-muted);
     font-size: 15px;
+    display: grid;
+    gap: 8px;
 }
 
-blockquote strong {
+blockquote::before {
+    content: "Note";
     color: var(--color-lab);
     font-size: 11px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: .06em;
+    letter-spacing: .08em;
     display: block;
-    margin-bottom: 2px;
+    line-height: 1.1;
+}
+
+blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+blockquote.note::before {
+    content: "Note";
 }
 
 /* ── Blockquote — warning (amber) ── */
-blockquote.warn {
+blockquote.warn,
+blockquote.warning {
     background: var(--color-warn-bg);
     border-left-color: var(--color-warn);
 }
 
-blockquote.warn strong {
+blockquote.warn strong,
+blockquote.warning strong {
     color: var(--color-warn);
+}
+
+blockquote.warn::before,
+blockquote.warning::before {
+    content: "Warning";
+    color: var(--color-warn);
+}
+
+/* ── Blockquote — info (blue) ── */
+blockquote.info {
+    background: var(--color-info-bg);
+    border-left-color: var(--color-info);
+}
+
+blockquote.info::before {
+    content: "Info";
+    color: var(--color-info);
+}
+
+/* ── Blockquote — tip (green) ── */
+blockquote.tip {
+    background: #f0f7f4;
+    border-left-color: var(--color-lab);
+}
+
+blockquote.tip::before {
+    content: "Tip";
+    color: var(--color-lab);
+}
+
+/* ── Blockquote — important (rose) ── */
+blockquote.important {
+    background: var(--color-important-bg);
+    border-left-color: var(--color-important);
+}
+
+blockquote.important::before {
+    content: "Important";
+    color: var(--color-important);
 }
 
 /* ── Two-column layout ── */

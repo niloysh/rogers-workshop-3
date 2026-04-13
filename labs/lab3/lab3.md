@@ -23,7 +23,7 @@ In this lab you will:
 - build the reverse service chain as an exercise
 - optionally, if time, use the same idea to move traffic onto a lower-latency alternate path
 
-> **What to focus on** The core idea is SRv6 itself: the segment list expresses the path you want. In the main lab, that means service waypoints. If time permits, the optional extension uses the same idea to move traffic onto a lower-latency path.
+<blockquote class="info">The core idea is SRv6 itself: the segment list expresses the path you want. In the main lab, that means service waypoints. If time permits, the optional extension uses the same idea to move traffic onto a lower-latency path.</blockquote>
 
 ---
 
@@ -39,7 +39,7 @@ onos> cfg get org.onosproject.fwd.ReactiveForwarding
 
 Look for `ipv6Forwarding` in the output — it should show `true`.
 
-> **Why this matters** SRv6 adds an outer IPv6 header around the packet. This check simply confirms the existing fabric will carry that outer IPv6 packet correctly.
+<blockquote class="info">SRv6 adds an outer IPv6 header around the packet. This check simply confirms the existing fabric will carry that outer IPv6 packet correctly.</blockquote>
 
 ---
 
@@ -59,7 +59,7 @@ Look for `ipv6Forwarding` in the output — it should show `true`.
 
 The topology has a direct path between the two switches and an alternate path through `r1`, which we will use later in the optional exercise.
 
-> **Why two SIDs on r1?** `r1` has one SID per interface. Using the s1-facing SID or the s2-facing SID lets the segment list enter `r1` from the correct side, which matters when we later steer the forward and reverse directions differently.
+<blockquote class="info"><code>r1</code> has one SID per interface. Using the s1-facing SID or the s2-facing SID lets the segment list enter <code>r1</code> from the correct side, which matters when we later steer the forward and reverse directions differently.</blockquote>
 
 ---
 
@@ -162,7 +162,7 @@ onos> devices
 
 You should see `s1` and `s2` with `local-status=connected`.
 
-> **The current ONOS install should already have `ipv6Forwarding=true`** If it does not, IPv6 pings to SIDs and the outer SRv6 packets will fail to traverse the switches correctly.
+<blockquote class="warning">The current ONOS install should already have <code>ipv6Forwarding=true</code>. If it does not, IPv6 pings to SIDs and the outer SRv6 packets will fail to traverse the switches correctly.</blockquote>
 
 ---
 
@@ -181,7 +181,7 @@ onos> hosts
 onos> flows
 ```
 
-> **Expected** All four hosts appear, and `fwd` has installed ETH_DST-based rules on both switches. This gives you a working baseline fabric before SRv6 starts steering packets.
+<blockquote class="tip">All four hosts should appear, and <code>fwd</code> should have installed ETH_DST-based rules on both switches. This gives you a working baseline fabric before SRv6 starts steering packets.</blockquote>
 
 ---
 
@@ -201,22 +201,36 @@ From terminal 5:
 python3 configure_srv6.py
 ```
 
-This applies the same three-step pattern on each host:
+This applies the same host-side setup pattern on each node:
 
 ```text
-sysctl -w net.ipv6.conf.all.forwarding=1
-sysctl -w net.ipv6.conf.all.seg6_enabled=1
-sysctl -w net.ipv6.conf.<iface>.seg6_enabled=1
-ip -6 addr add <SID>/128 dev <iface>
+sysctl -w net.ipv6.conf.all.forwarding=1        # allow the host to forward IPv6 packets
+sysctl -w net.ipv6.conf.all.seg6_enabled=1      # turn on SRv6 processing globally
+sysctl -w net.ipv6.conf.<iface>.seg6_enabled=1  # also enable SRv6 on the specific interface
+ip -6 addr add <SID>/128 dev <iface>            # assign the SID that identifies this node
 ```
 
-| Host  | SID                                   | Note                              |
-| ----- | ------------------------------------- | --------------------------------- |
-| `h1`  | `fc00::1`                             |                                   |
-| `h2`  | `fc00::2`                             |                                   |
-| `mb1` | `fc00::b1`                            |                                   |
-| `mb2` | `fc00::b2`                            |                                   |
-| `r1`  | `fc00::a1` (eth0) / `fc00::a2` (eth1) | dual-homed, one SID per interface |
+<blockquote class="info">The first line lets a node act as transit when needed. The next two lines enable SRv6 support, and the final line gives that host or interface the SID other nodes will target.</blockquote>
+
+---
+
+<!-- _class: compact -->
+
+# SRv6 SID map for this lab
+
+Think of the SIDs by role, not as a flat list:
+
+- End hosts:
+  `h1 -> fc00::1`
+  `h2 -> fc00::2`
+- Service hops you may steer through:
+  `mb1 -> fc00::b1`
+  `mb2 -> fc00::b2`
+- Alternate-path router:
+  `r1 eth0 -> fc00::a1`
+  `r1 eth1 -> fc00::a2`
+
+<blockquote class="info"><code>::1</code> and <code>::2</code> are the endpoints, <code>::b*</code> are the boxes in the service chain, and <code>::a*</code> are the two faces of the alternate router.</blockquote>
 
 ---
 
@@ -231,7 +245,7 @@ mininet> h1 ping6 -c 2 fc00::b2    # h1 → mb2
 mininet> h1 ping6 -c 2 fc00::a1    # h1 → r1
 ```
 
-> **Expected: all four succeed.** Once IPv6 forwarding is enabled, the baseline fabric reacts to the first IPv6 packet from each host and installs ordinary ETH_DST-based rules. The switches never need to understand the SID or the SRH.
+<blockquote class="tip">All four pings should succeed. Once IPv6 forwarding is enabled, the baseline fabric reacts to the first IPv6 packet from each host and installs ordinary ETH_DST-based rules. The switches never need to understand the SID or the SRH.</blockquote>
 
 If any ping6 fails, check ONOS flows:
 
@@ -295,7 +309,7 @@ Send a suspicious request before adding any route:
 mininet> h1 curl http://10.0.0.2/malware
 ```
 
-> **Expected** `h2` responds and `mb2` prints nothing — traffic takes the direct path and bypasses the IDS.
+<blockquote class="tip"><code>h2</code> should respond and <code>mb2</code> should print nothing — traffic takes the direct path and bypasses the IDS.</blockquote>
 
 ---
 
@@ -335,7 +349,7 @@ mininet> h1 curl http://10.0.0.2/malware
 [HH:MM:SS] [mb2 IDS] [ALERT] 10.0.0.1 → 10.0.0.2 — GET /malware HTTP/1.1
 ```
 
-> **It works.** The segment list forced traffic through `mb1` and `mb2` before delivery to `h2`.
+<blockquote class="tip">The segment list forced traffic through <code>mb1</code> and <code>mb2</code> before delivery to <code>h2</code>.</blockquote>
 
 ---
 
@@ -349,7 +363,7 @@ SRH segments:   fc00::b1 → fc00::b2 → fc00::2
 Inner IPv4:     10.0.0.1 → 10.0.0.2
 ```
 
-> **Key point** The SRH is what expresses the service chain. Once you write the segment list, the packet is carried hop by hop through the network and visits the waypoints in that order.
+<blockquote class="info">The SRH is what expresses the service chain. Once you write the segment list, the packet is carried hop by hop through the network and visits the waypoints in that order.</blockquote>
 
 ---
 
@@ -358,6 +372,34 @@ Inner IPv4:     10.0.0.1 → 10.0.0.2
 # Exercise
 
 Build the reverse service chain yourself
+
+---
+
+<!-- _class: independent compact -->
+
+# Exercise — See the missing reverse path first
+
+Before you change anything, observe the problem on `mb1`.
+
+In terminal 5, enter `mb1` and start a capture:
+
+```bash
+./enter_host.sh mb1
+tshark -i mb1-eth0 -Y "icmp && ip.addr==10.0.0.1 && ip.addr==10.0.0.2"
+```
+
+Then in Mininet, ping from `h1` to `h2`:
+
+```text
+h1 ping -c 3 h2
+```
+
+What you should notice:
+
+- you see ICMP echo requests on `mb1`
+- you do **not** see the echo replies return through `mb1`
+
+That is the problem for this exercise. The forward SRv6 path exists, but the reverse path `h2 -> mb2 -> mb1 -> h1` does not yet exist.
 
 ---
 
@@ -379,37 +421,28 @@ Install the reverse SRv6 route so `h2 → mb2 → mb1 → h1`:
    sudo python3 exercises/verify.py
    ```
 
-> **Stuck?** Compare with `solutions/reverse_route.sh`
-
----
-
-<!-- _class: independent -->
-
-# Optional Exercise
-
-If time, extend the same service chain onto the lower-latency path.
-
-> Even if we do not cover this part live, we will come back to the same idea in Lab 4.
+<blockquote class="note">Compare with <code>solutions/reverse_route.sh</code> if you get stuck.</blockquote>
 
 ---
 
 <!-- _class: independent compact -->
 
-# Exercise 2 — Alternate Path via r1
+# Exercise — Alternate Path via r1 (Optional)
 
 <div class="topology-figure compact">
   <img src="../../assets/figures/lab3-onos-topology.svg" alt="Lab 3 topology with h1 on s1, h2 plus mb1 and mb2 on s2, and dual-homed router r1 forming a faster alternate path between the two switches." />
 </div>
 
-Optional independent exercise:
+Extend the same service chain onto the lower-latency path:
 
 - keep the same service chain
 - change the path by inserting `r1` into the segment list
 - observe how the RTT changes when the path changes
 
-> The direct `s1-s2` link is slower (`30 ms`). The alternate path through `r1` is faster (`5 ms + 5 ms`).
+<blockquote class="tip">The direct <code>s1-s2</code> link is slower (<code>30 ms</code>). The alternate path through <code>r1</code> is faster (<code>5 ms + 5 ms</code>).</blockquote>
 
-> The next slides give the procedure. Your job is to follow it and explain what changed: before each step, predict which path traffic will take and what RTT you expect.
+<blockquote class="tip">The next slides give the procedure. Before each step, predict which path traffic will take and what RTT you expect.</blockquote>
+
 
 ---
 
@@ -426,7 +459,7 @@ mininet> h1 ip route del 10.0.0.2
 mininet> h1 ping -c 5 10.0.0.2
 ```
 
-> Run the ping. What do you see? Compare the RTT you observe with the one-way delays shown in the topology.
+<blockquote class="tip">Run the ping. What do you see? Compare the RTT you observe with the one-way delays shown in the topology.</blockquote>
 
 ---
 
@@ -449,7 +482,7 @@ After:   h1 → s1 ──[5ms]──> r1 ──[5ms]──> s2 → mb1 → mb2 �
 
 The outer SRv6 packet first travels `s1 → r1` (5 ms), then `r1 → s2` (5 ms). The slow `s1-s2` direct link is never used.
 
-> Before you measure, predict the new steady-state RTT and explain why it should differ from the baseline.
+<blockquote class="tip">Before you measure, predict the new steady-state RTT and explain why it should differ from the baseline.</blockquote>
 
 ---
 
@@ -465,7 +498,7 @@ Run the ping. What do you see now?
 
 You may see one slower first packet because reactive forwarding has not seen the new outer flow yet, so rules are installed on both switches before forwarding. Focus on the steady-state RTT after that and compare it with your baseline.
 
-> Question: did the service chain stay the same while the path changed underneath it?
+<blockquote class="tip">Did the service chain stay the same while the path changed underneath it?</blockquote>
 
 Confirm `mb2` still sees the traffic (service chain is intact):
 
@@ -491,7 +524,7 @@ Segment order for the reverse chain:
 h2 → mb2 (fc00::b2) → mb1 (fc00::b1) → r1-eth1 (fc00::a2) → h1 (fc00::1)
 ```
 
-> **Why `fc00::a2` and not `fc00::a1`?** `fc00::a1` lives on r1's s1-facing interface. Sending to it from `mb1` would send traffic back toward the slow `s2 → s1` side first. `fc00::a2` lives on r1's s2-facing interface, so `mb1` reaches `r1` directly over the 5 ms leg.
+<blockquote class="info"><code>fc00::a1</code> lives on <code>r1</code>'s s1-facing interface. Sending to it from <code>mb1</code> would send traffic back toward the slow <code>s2 → s1</code> side first. <code>fc00::a2</code> lives on <code>r1</code>'s s2-facing interface, so <code>mb1</code> reaches <code>r1</code> directly over the 5 ms leg.</blockquote>
 
 ---
 
@@ -515,10 +548,10 @@ Both should now show the same lower steady-state RTT you observed after moving o
 
 ```bash
 ./enter_host.sh r1
-tshark -i r1-eth0 -i r1-eth1 -Y "ipv6.routing.type == 4" -c 4
+tshark -i r1-eth0 -i r1-eth1 -Y "ipv6.routing.type == 4"
 ```
 
-> **Expected**: two SRv6 packets on `r1-eth0` (from s1) and two on `r1-eth1` (toward s2), one per direction per ping.
+<blockquote class="tip">You should see two SRv6 packets on <code>r1-eth0</code> (from s1) and two on <code>r1-eth1</code> (toward s2), one per direction per ping.</blockquote>
 
 ---
 
@@ -551,4 +584,4 @@ In this lab you confirmed that:
 - the application does not need to change; changing the segment list changes the realized path and service chain underneath it
 - the reverse direction needs its own segment list as well
 
-> **Looking ahead to Lab 4** SRv6 keeps the path decision in the segment list, so the same application traffic can be steered differently without changing the application itself. In the optional extension, that same mechanism moved traffic onto a lower-latency path. Lab 4 builds on this idea by letting a controller realize the needed path and treatment from a higher-level request.
+<blockquote class="info">SRv6 keeps the path decision in the segment list, so the same application traffic can be steered differently without changing the application itself. In the optional extension, that same mechanism moved traffic onto a lower-latency path. Lab 4 builds on this idea by letting a controller realize the needed path and treatment from a higher-level request.</blockquote>
