@@ -208,7 +208,7 @@ Environment variables:
 
 What this installs:
   - Base workshop tools: git, vim, tmux, curl, wget, ssh client
-  - Python 3 and the Python packages used in Labs 2-4
+  - Python 3, Jupyter Notebook, and the Python packages used in Labs 2-4
   - Mininet, Open vSwitch, iproute2, tcpdump, tshark, iperf3, iptables
   - Docker and an ONOS container for Lab 2
   - SRv6 sysctl settings for Labs 3-4
@@ -315,6 +315,7 @@ pip_install \
   black \
   matplotlib \
   networkx \
+  notebook \
   pylint \
   pyyaml
 

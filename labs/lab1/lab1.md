@@ -290,16 +290,16 @@ Programming flow rules
 
 # Exercise 1
 
-The topology is already built — no Python edits needed:
+The topology is already built for you. See `~/labs/lab1/exercises/topology.py`.
 
-```
-h1 (10.0.0.1) ── port 1 ──┐
-h2 (10.0.0.2) ── port 2 ──┤ s1
-h3 (10.0.0.3) ── port 3 ──┘
-```
+<div class="topology-figure compact">
+  <img src="../../assets/figures/lab1-exercise1-topology.svg" alt="Exercise 1 topology with h1, h2, and h3 connected to switch s1, with port 1 for h1, port 2 for h2, and port 3 for h3." />
+</div>
 
-Your goal: make **h1 ↔ h2** work by adding exactly **two flow rules**.  
+Your goal: make **h1 ↔ h2** work by adding exactly **two flow rules** using `ovs-ofctl` commands.
 h3 is connected but not used yet. Confirm port numbers with `net` in the Mininet CLI.
+
+> **Hint** Treat the two directions separately. In the exercise scripts, match `in_port`, `nw_src`, and `nw_dst` so each rule applies only to the traffic you intend.
 
 ---
 
@@ -327,6 +327,8 @@ Before moving on to Exercise 2:
 - does `dump-flows s1` show `n_packets` > 0 on both your rules?
 - compare your solution with `solutions/part1/add_rules.sh`
 
+`n_packets` should increase after each successful ping.
+
 ---
 
 <!-- _class: independent -->
@@ -340,6 +342,8 @@ Same topology. Extend your rules so:
 
 The h1 ↔ h2 rules from Exercise 1 are already pre-filled as a reference.  
 Add two more rules for h1 ↔ h3.
+
+> **Hint** You do not need an explicit `drop` rule for `h2 ↔ h3`. In OVS, packets that do not match any rule are dropped automatically.
 
 ---
 
@@ -358,27 +362,24 @@ Keep the topology running from Exercise 1 — no restart needed.
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
 # Troubleshooting
 
-| Symptom | Fix |
-|---|---|
-| `version negotiation failed` | add `-O OpenFlow13` to your `ovs-ofctl` command |
-| ping fails after adding rules | run `dump-flows s1` — check that `n_packets` is non-zero |
-| rules keep disappearing | add `idle_timeout=0` to your `add-flow` commands |
-| h2 ↔ h3 still works | check you are matching specific `nw_src` and `nw_dst` in every rule |
+**`ovs-ofctl` says `version negotiation failed`.**
+Add `-O OpenFlow13` to every `ovs-ofctl` command.
 
----
+**I added rules, but ping still fails.**
+Check the port mapping with `net` or `sudo ovs-ofctl -O OpenFlow13 show s1`. Make sure you installed both directions and that `in_port`, `nw_src`, and `nw_dst` match the traffic you intend.
 
-<!-- _class: independent -->
+**My rules disappear after a short pause.**
+Add `idle_timeout=0` to every `add-flow` rule so OVS does not age it out.
 
-# Hints
+**Exercise 2 still lets `h2` and `h3` talk.**
+Your matches are too broad. Only install rules for `h1 ↔ h2` and `h1 ↔ h3`; packets without a matching rule are dropped automatically.
 
-- **Port numbers** — run `net` in the Mininet CLI to see which host connects to which port
-- **Directional rules** — use `in_port` along with `nw_src` and `nw_dst` to be precise about direction
-- **Isolation** — no `drop` rule is needed; OVS drops any packet that does not match a rule
-- **Checking counters** — after each ping, `dump-flows s1` should show `n_packets` incrementing
+**Mininet or the verifier behaves strangely after a previous run.**
+Exit Mininet, run `sudo mn -c`, then restart the topology from `~/labs/lab1`.
 
 ---
 
@@ -391,6 +392,6 @@ In this lab you:
 - built a custom topology in Python with controlled bandwidth and delay
 - engineered selective connectivity — some paths allowed, some blocked
 
-> **The same principle applies at scale** — whether it's OpenFlow rules on OVS or SRv6 segment lists in a 5G transport network, the forwarding plane does exactly what you tell it.
+> **This is the core idea we build on in later labs** — first you will program forwarding directly; by Lab 4, a transport slice controller will take a higher-level request and realize it using the same underlying mechanisms.
 
 **Next in the schedule** is Concepts 2, where you will connect this hands-on work to the OpenFlow model, controllers, and intents. After that, Lab 2 moves from manual rules to controller-based connectivity with ONOS.

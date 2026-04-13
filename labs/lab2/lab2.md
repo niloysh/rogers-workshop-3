@@ -37,20 +37,17 @@ In this lab you will:
 
 ---
 
+<!-- _class: compact -->
+
 # From Lab 1 to Lab 2
 
-In Lab 1 you installed flow rules manually with `ovs-ofctl`.
+- **Lab 1** showed forwarding in its simplest form: you wrote the exact match/action rules yourself.
+- That made the mechanism visible, but it also meant you had to reason locally, one switch at a time.
+- **Lab 2** keeps the same underlying idea, but moves the control point up to ONOS.
+- ONOS discovers the topology, learns where hosts are, computes paths, and installs the switch rules needed to realize connectivity.
+- When the topology changes, ONOS can update those rules again without you logging into each switch.
 
-Today ONOS does that work automatically:
-
-|               | Lab 1          | Lab 2              |
-| ------------- | -------------- | ------------------ |
-| Flow rules    | You write them | ONOS installs them |
-| Topology view | You infer it   | ONOS discovers it  |
-| Link failure  | Traffic stops  | ONOS reroutes      |
-| Control plane | You            | ONOS               |
-
-> **Your job changes** — instead of configuring each switch directly, you observe ONOS state and program the network through the controller.
+> **What changes** The data plane is still realized by flow rules in the switches. What changes is the level of abstraction: instead of programming one device at a time, you work through a controller with a network-wide view.
 
 ---
 
@@ -273,6 +270,30 @@ Open `exercises/exercise.ipynb` in Jupyter. You will complete a notebook that ac
 
 ---
 
+<!-- _class: compact -->
+
+# Troubleshooting
+
+**ONOS shows no devices, or the REST API returns an empty device list.**
+Wait a few seconds after starting `triangle_topology.py`, then check `onos> devices` again. If it is still empty, confirm Mininet is running and the `openflow` app is active.
+
+**`hosts` is empty, or the notebook says a host was not found.**
+Run `pingall` in Mininet first. ONOS only learns hosts after it sees traffic from them.
+
+**`org.onosproject.fwd` is active and devices are connected, but `pingall` still fails.**
+ONOS may be in a bad state. Run `sudo docker restart onos`, wait 1–2 minutes, reconnect the ONOS CLI, confirm `onos> devices` shows all switches as connected, then retry `pingall`.
+
+**Jupyter shows `NameError`, or the notebook state seems inconsistent.**
+Run the cells from top to bottom. If you jumped around, restart the kernel and rerun the notebook in order.
+
+**I deactivated `org.onosproject.fwd`, but traffic still works.**
+Wait a few seconds and check `onos> flows` again. The old `fwd` rules may still be present; the exercise should start only after they disappear.
+
+**The reroute loop keeps reacting to the same failure over and over.**
+In Part 4, make sure you save the return value of `reroute_once(...)` back into `path_links`. Otherwise the loop keeps watching the old broken path.
+
+---
+
 # Summary
 
 In this lab you:
@@ -282,4 +303,4 @@ In this lab you:
 - added and removed flow rules through the ONOS REST API
 - completed a notebook controller that detects link failure and reroutes via the REST API
 
-> **Coming up** Lab 3 moves from centralized control to path steering with SRv6 — instead of a controller deciding the path, the ingress node encodes it directly in the packet header.
+> **Coming up** Lab 3 keeps the goal of programmable forwarding, but changes how the path is expressed: with SRv6, the route is carried in the packet itself as a segment list.

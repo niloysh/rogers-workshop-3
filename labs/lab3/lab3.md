@@ -393,31 +393,31 @@ If time, extend the same service chain onto the lower-latency path.
 
 ---
 
-<!-- _class: independent -->
+<!-- _class: independent compact -->
 
-# Recap the topology for the optional exercise
+# Exercise 2 — Alternate Path via r1
 
 <div class="topology-figure compact">
   <img src="../../assets/figures/lab3-onos-topology.svg" alt="Lab 3 topology with h1 on s1, h2 plus mb1 and mb2 on s2, and dual-homed router r1 forming a faster alternate path between the two switches." />
 </div>
 
-> The direct `s1-s2` link is slower (`30 ms`). The alternate path through `r1` is faster (`5 ms + 5 ms`). The optional exercise is to keep the same service chain while moving traffic onto that faster path.
+Optional independent exercise:
+
+- keep the same service chain
+- change the path by inserting `r1` into the segment list
+- observe how the RTT changes when the path changes
+
+> The direct `s1-s2` link is slower (`30 ms`). The alternate path through `r1` is faster (`5 ms + 5 ms`).
+
+> The next slides give the procedure. Your job is to follow it and explain what changed: before each step, predict which path traffic will take and what RTT you expect.
 
 ---
 
 <!-- _class: independent -->
 
-# Exercise 2 — Alternate Path via r1
+# Baseline RTT — what do you expect?
 
-Optional independent exercise: use SRv6 to choose the lower-latency path
-
----
-
-<!-- _class: independent -->
-
-# Baseline latency — the direct path
-
-Without any SRv6 route, traffic follows the ordinary direct `s1-s2` path. That link carries **30 ms** of delay.
+Without any SRv6 route, traffic follows the ordinary direct `s1-s2` path. Based on the topology, what RTT do you expect?
 
 Remove any existing route on `h1`, then measure:
 
@@ -426,11 +426,7 @@ mininet> h1 ip route del 10.0.0.2
 mininet> h1 ping -c 5 10.0.0.2
 ```
 
-```text
-rtt min/avg/max = 60.x/60.x/60.x ms
-```
-
-> **~60 ms RTT** — 30 ms each way on the direct link. This is the path you get before SRv6 steering changes anything.
+> Run the ping. What do you see? Compare the RTT you observe with the one-way delays shown in the topology.
 
 ---
 
@@ -453,27 +449,23 @@ After:   h1 → s1 ──[5ms]──> r1 ──[5ms]──> s2 → mb1 → mb2 �
 
 The outer SRv6 packet first travels `s1 → r1` (5 ms), then `r1 → s2` (5 ms). The slow `s1-s2` direct link is never used.
 
+> Before you measure, predict the new steady-state RTT and explain why it should differ from the baseline.
+
 ---
 
 <!-- _class: independent -->
 
-# Measure the alternate path
+# Measure the alternate path — what changed?
 
 ```text
 mininet> h1 ping -c 5 10.0.0.2
 ```
 
-```text
-64 bytes icmp_seq=1 time=79.x ms   ← first packet: reactive forwarding installs new rules
-64 bytes icmp_seq=2 time=20.x ms
-64 bytes icmp_seq=3 time=20.x ms
-64 bytes icmp_seq=4 time=20.x ms
-64 bytes icmp_seq=5 time=20.x ms
-```
+Run the ping. What do you see now?
 
-The first packet is slow because reactive forwarding has not seen the new outer flow yet, so rules are installed on both switches before forwarding. From seq=2 onwards, the rules are cached and the path shows its true latency.
+You may see one slower first packet because reactive forwarding has not seen the new outer flow yet, so rules are installed on both switches before forwarding. Focus on the steady-state RTT after that and compare it with your baseline.
 
-> **~20 ms steady-state RTT** — down from 60 ms. Two 5 ms legs (s1→r1, r1→s2) each way. The segment list moved traffic off the slow direct link and onto the faster alternate path.
+> Question: did the service chain stay the same while the path changed underneath it?
 
 Confirm `mb2` still sees the traffic (service chain is intact):
 
@@ -519,7 +511,7 @@ Ping from `h2` to confirm the reverse path also routes through `r1`:
 mininet> h2 ping -c 5 10.0.0.1
 ```
 
-Both should show ~20 ms RTT. You can also capture on `r1` to confirm it sees traffic in both directions:
+Both should now show the same lower steady-state RTT you observed after moving onto the `r1` path. You can also capture on `r1` to confirm it sees traffic in both directions:
 
 ```bash
 ./enter_host.sh r1
@@ -534,14 +526,20 @@ tshark -i r1-eth0 -i r1-eth1 -Y "ipv6.routing.type == 4" -c 4
 
 # Troubleshooting
 
-| Symptom                              | Fix                                                                                        |
-| ------------------------------------ | ------------------------------------------------------------------------------------------ |
-| `devices` empty after topology start | wait a few seconds, retry; confirm ONOS is running                                         |
-| `pingall` fails entirely             | check `onos> apps -s -a` — openflow and fwd must be active                                 |
-| `ping6 fc00::2` fails                | check `cfg get org.onosproject.fwd.ReactiveForwarding` — `ipv6Forwarding` should be `true` |
-| `flows` shows only IPv4 rules        | same as above — verify `ipv6Forwarding` is enabled in the ONOS config                      |
-| IDS log empty after steering         | confirm the route uses `mode encap` and includes `fc00::b2`                                |
-| `flows` empty after pingall          | fwd or proxyarp may not be active — check ONOS apps and retry                              |
+**`devices` is empty, or `pingall` fails before the SRv6 steps start.**
+Check `onos> apps -s -a` and confirm `openflow`, `fwd`, and `proxyarp` are active. If devices are connected and `fwd` is active but traffic still fails, run `sudo docker restart onos`, wait 1–2 minutes, reconnect the ONOS CLI, and retry.
+
+**`ping6` to `fc00::2` or the other SIDs fails.**
+Run `python3 configure_srv6.py` if you have not already, and verify `onos> cfg get org.onosproject.fwd.ReactiveForwarding` still shows `ipv6Forwarding=true`.
+
+**The service chain is installed, but `mb2` prints nothing.**
+Make sure both `./run_h2_http_server.sh` and `./run_mb2_ids.sh` are running. Then confirm the route uses `encap seg6 mode encap` and includes `fc00::b2` in the segment list.
+
+**The reverse-direction exercise does not work.**
+Check the route on `h2`: the segment list should start `fc00::b2,fc00::b1,...,fc00::1` so the reverse direction visits the same waypoints in reverse order. Run `sudo python3 exercises/verify.py` to confirm.
+
+**The optional `r1` exercise does not reduce RTT.**
+The forward route on `h1` should begin with `fc00::a1`; the reverse route on `h2` should use `fc00::a2`. If the reverse path still uses the direct link, only one direction will improve.
 
 ---
 
@@ -550,9 +548,7 @@ tshark -i r1-eth0 -i r1-eth1 -Y "ipv6.routing.type == 4" -c 4
 In this lab you confirmed that:
 
 - an SRv6 segment list can force traffic through explicit waypoints before it reaches the destination
-- the existing network fabric can carry the outer IPv6 packets used by SRv6
+- the application does not need to change; changing the segment list changes the realized path and service chain underneath it
 - the reverse direction needs its own segment list as well
 
-> **Optional extension** If you continued to Exercise 2, adding `r1` as a segment moved traffic onto the lower-latency path and cut RTT from about 60 ms to about 20 ms.
-
-> **Key insight** SRv6 keeps the path decision in the segment list. In this lab that lets you express the service chain, and in the optional extension it also lets you express the lower-latency alternate path.
+> **Looking ahead to Lab 4** SRv6 keeps the path decision in the segment list, so the same application traffic can be steered differently without changing the application itself. In the optional extension, that same mechanism moved traffic onto a lower-latency path. Lab 4 builds on this idea by letting a controller realize the needed path and treatment from a higher-level request.
