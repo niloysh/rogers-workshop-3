@@ -17,6 +17,19 @@ cleanup() {
 }
 trap cleanup EXIT
 
+die() {
+  printf 'error: %s\n' "$1" >&2
+  exit 1
+}
+
+ensure_safe_dest_dir() {
+  local dest_dir="$1"
+
+  [[ -n "${dest_dir}" ]] || die "destination directory resolved to an empty path"
+  [[ "${dest_dir}" != "/" ]] || die "refusing to use '/' as destination directory"
+  [[ "${dest_dir}" != "${HOME}" ]] || die "refusing to use '$HOME' as destination directory"
+}
+
 usage() {
   cat <<EOF
 Usage:
@@ -74,8 +87,13 @@ if [[ ! -d "${EXTRACT_DIR}/${REPO_ROOT_DIR}/labs" ]]; then
 fi
 
 DEST_DIR="$(eval echo "${DEST_DIR}")"
+ensure_safe_dest_dir "${DEST_DIR}"
 
-rm -rf "${DEST_DIR}"
+if [[ -e "${DEST_DIR}" ]]; then
+  echo "==> Removing existing destination"
+  rm -rf "${DEST_DIR}"
+fi
+
 mkdir -p "${DEST_DIR}"
 cp -R "${EXTRACT_DIR}/${REPO_ROOT_DIR}/labs/." "${DEST_DIR}/"
 

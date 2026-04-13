@@ -61,6 +61,19 @@ die() {
   exit 1
 }
 
+resolve_dest_dir() {
+  local raw_dest="${DEST_DIR:-$HOME/labs}"
+  eval echo "${raw_dest}"
+}
+
+ensure_safe_dest_dir() {
+  local dest_dir="$1"
+
+  [[ -n "${dest_dir}" ]] || die "destination directory resolved to an empty path"
+  [[ "${dest_dir}" != "/" ]] || die "refusing to use '/' as destination directory"
+  [[ "${dest_dir}" != "${HOME}" ]] || die "refusing to use '$HOME' as destination directory"
+}
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -139,13 +152,21 @@ fi
 
 # Download and run fetch_labs if not skipped
 if [[ "${SKIP_FETCH}" -eq 0 ]]; then
+  DEST_DIR="$(resolve_dest_dir)"
+  ensure_safe_dest_dir "${DEST_DIR}"
+
+  if [[ -e "${DEST_DIR}" ]]; then
+    echo "==> Removing existing labs directory at ${DEST_DIR}"
+    rm -rf "${DEST_DIR}"
+  fi
+
   echo "==> Downloading fetch_labs script"
   if ! curl -fsSL "${GITHUB_RAW_URL}/scripts/fetch_labs.sh" -o "${FETCH_LABS_SCRIPT}"; then
     die "failed to download fetch_labs script from ${GITHUB_RAW_URL}/scripts/fetch_labs.sh"
   fi
   
   echo "==> Running fetch_labs"
-  bash "${FETCH_LABS_SCRIPT}"
+  DEST_DIR="${DEST_DIR}" bash "${FETCH_LABS_SCRIPT}"
   echo
 else
   echo "(skipped fetch_labs as requested)"
