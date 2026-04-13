@@ -8,18 +8,9 @@ paginate: true
 
 <span class="tag">Lab 3</span>
 
-# SRv6 Service Chaining
-# with ONOS
+# Path Steering with SRv6
 
 Rogers Executive Workshop 3 — Transport Network
-
----
-
-<!-- _class: divider -->
-
-# What We Are Testing
-
-Can Lab 3's SRv6 service chain run with ONOS controlling the switches?
 
 ---
 
@@ -27,35 +18,28 @@ Can Lab 3's SRv6 service chain run with ONOS controlling the switches?
 
 In this lab you will:
 
-- connect the topology to ONOS and use a dual-homed Linux router (`r1`) as a faster alternate path between `s1` and `s2`
-- confirm that ONOS's reactive forwarding handles IPv6 traffic
-- run the SRv6 service chain through `mb1` and `mb2`
-- add `r1` to the segment list and observe latency drop from ~60 ms to ~20 ms
-- steer the reverse path through `r1` as well
+- establish baseline IPv6 reachability across the topology
+- use an SRv6 segment list to force traffic through two service waypoints before it reaches the destination
+- build the reverse service chain as an exercise
+- optionally, if time, use the same idea to move traffic onto a lower-latency alternate path
 
-> **New this lab** The direct `s1-s2` link carries 30 ms of artificial delay. The alternate path through `r1` (5 ms each leg) is faster — but ONOS's hop-count routing always prefers the direct link. SRv6 lets you override that choice.
+> **What to focus on** The core idea is SRv6 itself: the segment list expresses the path you want. In the main lab, that means service waypoints. If time permits, the optional extension uses the same idea to move traffic onto a lower-latency path.
 
 ---
 
-# Why we need extra configuration
+# One forwarding check
 
-ONOS's `fwd` app is purely **L2** — its selector is `IN_PORT + ETH_TYPE + ETH_SRC + ETH_DST`. No IP addresses. All the `matchIpv4Address`, `matchIpv6Address`, etc. flags default to `false`.
+The switched fabric from Lab 2 is still providing the baseline forwarding underneath this lab. Because SRv6 creates an outer IPv6 packet, that baseline fabric must already carry IPv6 traffic correctly.
 
-By default `fwd` only intercepts `ETH_TYPE:ipv4` packets. IPv6 PacketIn events are ignored, so no rules are ever installed for `ping6` to SRv6 SIDs or for the outer SRv6 IPv6 frames.
-
-The fix is one flag that adds `ETH_TYPE:ipv6` to the set of intercepted EtherTypes:
-
-```text
-onos> cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true
-```
-
-Verify it took effect:
+The ONOS install should already have this enabled. Check it in the ONOS CLI:
 
 ```text
 onos> cfg get org.onosproject.fwd.ReactiveForwarding
 ```
 
-> **`ipv6Forwarding` only changes which EtherTypes are intercepted** — the installed rules still match on `ETH_TYPE + ETH_SRC + ETH_DST`. This is ideal for SRv6: the switch matches on ETH_DST (next-hop MAC) and never needs to parse the IPv6 header or the SRH.
+Look for `ipv6Forwarding` in the output — it should show `true`.
+
+> **Why this matters** SRv6 adds an outer IPv6 header around the packet. This check simply confirms the existing fabric will carry that outer IPv6 packet correctly.
 
 ---
 
@@ -65,17 +49,17 @@ onos> cfg get org.onosproject.fwd.ReactiveForwarding
   <img src="../../assets/figures/lab3-onos-topology.svg" alt="Lab 3 topology with h1 on s1, h2 plus mb1 and mb2 on s2, and dual-homed router r1 forming a faster alternate path between the two switches." />
 </div>
 
-| Node | Role                | IPv4     | SRv6 SID  |
-| ---- | ------------------- | -------- | --------- |
-| h1   | Traffic source      | 10.0.0.1 | fc00::1   |
-| h2   | Traffic destination | 10.0.0.2 | fc00::2   |
-| mb1  | Waypoint 1          | 10.0.0.3 | fc00::b1  |
-| mb2  | IDS / waypoint 2    | 10.0.0.4 | fc00::b2  |
+| Node | Role                | IPv4     | SRv6 SID                          |
+| ---- | ------------------- | -------- | --------------------------------- |
+| h1   | Traffic source      | 10.0.0.1 | fc00::1                           |
+| h2   | Traffic destination | 10.0.0.2 | fc00::2                           |
+| mb1  | Waypoint 1          | 10.0.0.3 | fc00::b1                          |
+| mb2  | IDS / waypoint 2    | 10.0.0.4 | fc00::b2                          |
 | r1   | SRv6 router         | 10.0.0.5 | fc00::a1 (eth0) / fc00::a2 (eth1) |
 
-Switches `s1` and `s2` use **OpenFlow13** and connect to ONOS at `127.0.0.1:6653`. `r1` is a dual-homed Linux host (eth0 → s1, eth1 → s2). Link delays: s1-s2 = **30 ms**, s1-r1 = r1-s2 = **5 ms**.
+The topology has a direct path between the two switches and an alternate path through `r1`, which we will use later in the optional exercise.
 
-> **Why two SIDs on r1?** ONOS associates each SID with the switch where it was learned. `fc00::a1` is learned from s1, so packets to it route via s1. `fc00::a2` is learned from s2, so packets to it route via s2. Using the correct SID in each direction keeps both paths on the 5 ms links.
+> **Why two SIDs on r1?** `r1` has one SID per interface. Using the s1-facing SID or the s2-facing SID lets the segment list enter `r1` from the correct side, which matters when we later steer the forward and reverse directions differently.
 
 ---
 
@@ -83,11 +67,11 @@ Switches `s1` and `s2` use **OpenFlow13** and connect to ONOS at `127.0.0.1:6653
 
 # Before you start
 
-**First: clean up Lab 3 completely.**
+**First: clean up Lab 2 completely.**
 
 1. Exit any running Mininet (`Ctrl+D` or `exit` in the Mininet terminal)
 2. Run `sudo mn -c` in a terminal
-3. Close all Lab 3 terminals
+3. Close all Lab 2 terminals
 
 Then open **five fresh terminals**.
 
@@ -100,7 +84,7 @@ cd ~/labs/lab3
 | Terminal           | Purpose                                    |
 | ------------------ | ------------------------------------------ |
 | 1 — Mininet        | start topology, run host commands          |
-| 2 — ONOS CLI       | activate apps, inspect flows               |
+| 2 — ONOS CLI       | check apps, config, and flows              |
 | 3 — h2 HTTP server | `./run_h2_http_server.sh`                  |
 | 4 — mb2 IDS        | `./run_mb2_ids.sh`                         |
 | 5 — Shell          | `configure_srv6.py`, `exercises/verify.py` |
@@ -109,15 +93,15 @@ cd ~/labs/lab3
 
 <!-- _class: divider -->
 
-# Step 1 — Connect to ONOS
+# Step 1 — Prepare the baseline network
 
-Same as Lab 2
+Baseline forwarding first, then SRv6 steering
 
 ---
 
 # Start the topology
 
-Make sure ONOS is running, then start Mininet (terminal 1):
+From `~/labs/lab3/`, start Mininet (terminal 1):
 
 ```bash
 sudo python3 topology.py
@@ -138,21 +122,37 @@ ssh -p 8101 -o HostKeyAlgorithms=+ssh-rsa onos@localhost
 
 ---
 
-# Activate the required apps
+<!-- _class: compact -->
 
-Same three apps as Lab 2, plus one extra configuration flag:
+# Check the baseline fabric prerequisites (1/2)
 
-```text
-onos> app activate org.onosproject.openflow
-onos> app activate org.onosproject.fwd
-onos> app activate org.onosproject.proxyarp
-```
-
-Then enable IPv6 forwarding on `fwd`:
+From the ONOS CLI, verify the required apps are active:
 
 ```text
-onos> cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true
+onos> apps -s -a
 ```
+
+You should see these three in the list:
+
+```text
+org.onosproject.openflow
+org.onosproject.fwd
+org.onosproject.proxyarp
+```
+
+---
+
+<!-- _class: compact -->
+
+# Check the baseline fabric prerequisites (2/2)
+
+Then verify that IPv6 forwarding is enabled in `fwd`:
+
+```text
+onos> cfg get org.onosproject.fwd.ReactiveForwarding
+```
+
+Look for `ipv6Forwarding` in the output — it should show `true`.
 
 Confirm both switches connected:
 
@@ -162,26 +162,26 @@ onos> devices
 
 You should see `s1` and `s2` with `local-status=connected`.
 
-> **Without `ipv6Forwarding true`**, the fwd app only installs IPv4 rules. IPv6 pings to SIDs and the outer SRv6 packets will fail to traverse the switches.
+> **The current ONOS install should already have `ipv6Forwarding=true`** If it does not, IPv6 pings to SIDs and the outer SRv6 packets will fail to traverse the switches correctly.
 
 ---
 
-# Verify IPv4 connectivity
+# Verify the baseline path
 
-Trigger host discovery and confirm ONOS installs forwarding rules:
+Before adding any SRv6 state, confirm the plain network works end to end:
 
 ```text
 mininet> pingall
 ```
 
-Check that ONOS learned the hosts and wrote the rules:
+Check that the hosts were learned and the baseline forwarding rules were installed:
 
 ```text
 onos> hosts
 onos> flows
 ```
 
-> **Expected** All four hosts appear, and `fwd` has installed ETH_DST-based rules on both switches. This confirms the ONOS-controlled baseline works before adding SRv6.
+> **Expected** All four hosts appear, and `fwd` has installed ETH_DST-based rules on both switches. This gives you a working baseline fabric before SRv6 starts steering packets.
 
 ---
 
@@ -189,7 +189,7 @@ onos> flows
 
 # Step 2 — SRv6 Setup
 
-Same as Lab 3 — configure SIDs on the hosts, not the switches
+Now configure the SIDs used in this lab
 
 ---
 
@@ -210,19 +210,19 @@ sysctl -w net.ipv6.conf.<iface>.seg6_enabled=1
 ip -6 addr add <SID>/128 dev <iface>
 ```
 
-| Host  | SID        | Note                          |
-| ----- | ---------- | ----------------------------- |
-| `h1`  | `fc00::1`  |                               |
-| `h2`  | `fc00::2`  |                               |
-| `mb1` | `fc00::b1` |                               |
-| `mb2` | `fc00::b2` |                               |
+| Host  | SID                                   | Note                              |
+| ----- | ------------------------------------- | --------------------------------- |
+| `h1`  | `fc00::1`                             |                                   |
+| `h2`  | `fc00::2`                             |                                   |
+| `mb1` | `fc00::b1`                            |                                   |
+| `mb2` | `fc00::b2`                            |                                   |
 | `r1`  | `fc00::a1` (eth0) / `fc00::a2` (eth1) | dual-homed, one SID per interface |
 
 ---
 
-# Verify SID reachability — the key test
+# Verify SID reachability — the key prerequisite
 
-Can ONOS-managed switches forward IPv6 ping to the SIDs?
+Can the switched fabric carry IPv6 packets to every SID?
 
 ```text
 mininet> h1 ping6 -c 2 fc00::2     # h1 → h2
@@ -231,7 +231,7 @@ mininet> h1 ping6 -c 2 fc00::b2    # h1 → mb2
 mininet> h1 ping6 -c 2 fc00::a1    # h1 → r1
 ```
 
-> **Expected: all four succeed.** ONOS's fwd app reacts to the first IPv6 packet from each host, learns the source MAC, and installs an ETH_DST-based rule. Subsequent packets are forwarded by that rule — the fact that the payload is IPv6 is invisible to the switch.
+> **Expected: all four succeed.** Once IPv6 forwarding is enabled, the baseline fabric reacts to the first IPv6 packet from each host and installs ordinary ETH_DST-based rules. The switches never need to understand the SID or the SRH.
 
 If any ping6 fails, check ONOS flows:
 
@@ -243,7 +243,7 @@ onos> flows
 
 <!-- _class: compact -->
 
-# What ONOS installed for IPv6
+# Optional check — IPv6 forwarding rules appear
 
 After the ping6 tests, inspect the flows on `s2`:
 
@@ -251,21 +251,21 @@ After the ping6 tests, inspect the flows on `s2`:
 sudo ovs-ofctl dump-flows s2 -O OpenFlow13
 ```
 
-With `ipv6Forwarding true`, you will see IPv6-scoped L2 rules alongside the IPv4 ones:
+With `ipv6Forwarding true`, you will see IPv6-scoped forwarding rules alongside the IPv4 ones:
 
 ```text
-priority=10, ipv6,
-  in_port="s2-eth4", dl_src=00:00:00:00:00:01, dl_dst=00:00:00:00:00:03
-  actions=output:"s2-eth2"
+priority=10, ipv6, ...
 ```
 
-The selector is `ETH_TYPE:ipv6 + IN_PORT + ETH_SRC + ETH_DST` — no IPv6 addresses anywhere. You can confirm the match flags with:
+You do not need to study the exact rule fields for this lab. The important point is simply that, after the `ping6` tests, the baseline fabric has learned how to carry the outer IPv6 packets used by SRv6.
+
+If you want, you can confirm the forwarding setting again with:
 
 ```text
 onos> cfg get org.onosproject.fwd.ReactiveForwarding
 ```
 
-All `matchIpv6Address`, `matchIpv4Address`, etc. will show `value=false`.
+Look for `ipv6Forwarding` — it should still show `true`.
 
 ---
 
@@ -273,7 +273,7 @@ All `matchIpv6Address`, `matchIpv4Address`, etc. will show `value=false`.
 
 # Step 3 — Service Chain
 
-Same SRv6 steering commands as Lab 3
+Use SRv6 to force traffic through the waypoints
 
 ---
 
@@ -295,19 +295,19 @@ Send a suspicious request before adding any route:
 mininet> h1 curl http://10.0.0.2/malware
 ```
 
-> **Expected** `h2` responds and `mb2` prints nothing — traffic takes the direct path and bypasses the IDS. This baseline is identical to Lab 3.
+> **Expected** `h2` responds and `mb2` prints nothing — traffic takes the direct path and bypasses the IDS.
 
 ---
 
 # Program the service chain
 
-On `h1`, install the same SRv6 encap route as in Lab 3:
+On `h1`, install an SRv6 encap route that names `mb1`, then `mb2`, then `h2`:
 
 ```text
 mininet> h1 ip route add 10.0.0.2 encap seg6 mode encap segs fc00::b1,fc00::b2,fc00::2 dev h1-eth0
 ```
 
-The outer SRv6 packet is now an IPv6 frame — ONOS's fwd app will handle it exactly like a regular IPv6 packet, forwarding it based on the MAC of `mb1`.
+The segment list is what makes the packet visit `mb1`, then `mb2`, then `h2`.
 
 ---
 
@@ -335,19 +335,13 @@ mininet> h1 curl http://10.0.0.2/malware
 [HH:MM:SS] [mb2 IDS] [ALERT] 10.0.0.1 → 10.0.0.2 — GET /malware HTTP/1.1
 ```
 
-> **It works.** ONOS-managed switches forward the SRv6 outer packet to `mb1`, then to `mb2`, then to `h2` — using the same MAC-based flow rules that handle ordinary IPv4. The controller does not need to know about SRv6 at all.
+> **It works.** The segment list forced traffic through `mb1` and `mb2` before delivery to `h2`.
 
 ---
 
-# What ONOS sees vs. what the SRH does
+# What the SRH does
 
-ONOS's perspective — a pure L2 rule for the first hop:
-
-```text
-ETH_TYPE:ipv6, ETH_SRC:h1_mac, ETH_DST:mb1_mac → output: port-to-mb1
-```
-
-The SRH's perspective — a steered IPv6 packet:
+The SRH carries the path you want:
 
 ```text
 Outer IPv6 src: fc00::1  dst: fc00::b1
@@ -355,21 +349,75 @@ SRH segments:   fc00::b1 → fc00::b2 → fc00::2
 Inner IPv4:     10.0.0.1 → 10.0.0.2
 ```
 
-> **ONOS only sees the Ethernet header.** The IPv6 addresses, extension headers, and SRH are all invisible to the switch's match logic. Path steering is entirely a host-level concern — ONOS just provides L2 forwarding scoped to IPv6 EtherType.
+> **Key point** The SRH is what expresses the service chain. Once you write the segment list, the packet is carried hop by hop through the network and visits the waypoints in that order.
 
 ---
 
 <!-- _class: divider -->
 
-# Step 4 — Alternate Path via r1
+# Exercise
 
-Using SRv6 to override ONOS's routing decision
+Build the reverse service chain yourself
 
 ---
 
+<!-- _class: independent compact -->
+
+# Exercise — Tasks
+
+Install the reverse SRv6 route so `h2 → mb2 → mb1 → h1`:
+
+1. **Fill in the two blanks** in `exercises/reverse_route.sh`, then run:
+
+   ```bash
+   sudo bash exercises/reverse_route.sh
+   ```
+
+2. **Verify:**
+
+   ```bash
+   sudo python3 exercises/verify.py
+   ```
+
+> **Stuck?** Compare with `solutions/reverse_route.sh`
+
+---
+
+<!-- _class: independent -->
+
+# Optional Exercise
+
+If time, extend the same service chain onto the lower-latency path.
+
+> Even if we do not cover this part live, we will come back to the same idea in Lab 4.
+
+---
+
+<!-- _class: independent -->
+
+# Recap the topology for the optional exercise
+
+<div class="topology-figure compact">
+  <img src="../../assets/figures/lab3-onos-topology.svg" alt="Lab 3 topology with h1 on s1, h2 plus mb1 and mb2 on s2, and dual-homed router r1 forming a faster alternate path between the two switches." />
+</div>
+
+> The direct `s1-s2` link is slower (`30 ms`). The alternate path through `r1` is faster (`5 ms + 5 ms`). The optional exercise is to keep the same service chain while moving traffic onto that faster path.
+
+---
+
+<!-- _class: independent -->
+
+# Exercise 2 — Alternate Path via r1
+
+Optional independent exercise: use SRv6 to choose the lower-latency path
+
+---
+
+<!-- _class: independent -->
+
 # Baseline latency — the direct path
 
-Without any SRv6 route, ONOS forwards `h1 → h2` via the direct `s1-s2` link (one hop, lowest cost). That link carries **30 ms** of delay.
+Without any SRv6 route, traffic follows the ordinary direct `s1-s2` path. That link carries **30 ms** of delay.
 
 Remove any existing route on `h1`, then measure:
 
@@ -382,9 +430,11 @@ mininet> h1 ping -c 5 10.0.0.2
 rtt min/avg/max = 60.x/60.x/60.x ms
 ```
 
-> **~60 ms RTT** — 30 ms each way on the direct link. ONOS chose this path because it has the fewest hops, ignoring the delay.
+> **~60 ms RTT** — 30 ms each way on the direct link. This is the path you get before SRv6 steering changes anything.
 
 ---
+
+<!-- _class: independent -->
 
 # Add r1 as the ingress segment
 
@@ -405,6 +455,8 @@ The outer SRv6 packet first travels `s1 → r1` (5 ms), then `r1 → s2` (5 ms).
 
 ---
 
+<!-- _class: independent -->
+
 # Measure the alternate path
 
 ```text
@@ -412,16 +464,16 @@ mininet> h1 ping -c 5 10.0.0.2
 ```
 
 ```text
-64 bytes icmp_seq=1 time=79.x ms   ← first packet: ONOS installs new rules
+64 bytes icmp_seq=1 time=79.x ms   ← first packet: reactive forwarding installs new rules
 64 bytes icmp_seq=2 time=20.x ms
 64 bytes icmp_seq=3 time=20.x ms
 64 bytes icmp_seq=4 time=20.x ms
 64 bytes icmp_seq=5 time=20.x ms
 ```
 
-The first packet is slow because ONOS has never seen the new `fc00::a2` flow — it installs rules reactively on both switches before forwarding. From seq=2 onwards, the rules are cached and the path shows its true latency.
+The first packet is slow because reactive forwarding has not seen the new outer flow yet, so rules are installed on both switches before forwarding. From seq=2 onwards, the rules are cached and the path shows its true latency.
 
-> **~20 ms steady-state RTT** — down from 60 ms. Two 5 ms legs (s1→r1, r1→s2) each way. ONOS still considers the direct link optimal by hop count; SRv6 overrides that entirely at the host.
+> **~20 ms steady-state RTT** — down from 60 ms. Two 5 ms legs (s1→r1, r1→s2) each way. The segment list moved traffic off the slow direct link and onto the faster alternate path.
 
 Confirm `mb2` still sees the traffic (service chain is intact):
 
@@ -430,6 +482,8 @@ Confirm `mb2` still sees the traffic (service chain is intact):
 ```
 
 ---
+
+<!-- _class: independent -->
 
 # Add the reverse path through r1
 
@@ -445,11 +499,11 @@ Segment order for the reverse chain:
 h2 → mb2 (fc00::b2) → mb1 (fc00::b1) → r1-eth1 (fc00::a2) → h1 (fc00::1)
 ```
 
-> **Why `fc00::a2` and not `fc00::a1`?** `fc00::a1` is on r1-eth0, which ONOS learned from s1. Sending to it from mb1 (on s2) would route via the slow 30 ms s1-s2 link. `fc00::a2` is on r1-eth1, learned from s2, so mb1 reaches r1 directly in 5 ms.
+> **Why `fc00::a2` and not `fc00::a1`?** `fc00::a1` lives on r1's s1-facing interface. Sending to it from `mb1` would send traffic back toward the slow `s2 → s1` side first. `fc00::a2` lives on r1's s2-facing interface, so `mb1` reaches `r1` directly over the 5 ms leg.
 
 ---
 
-<!-- _class: compact -->
+<!-- _class: independent compact -->
 
 # Verify both directions
 
@@ -476,48 +530,18 @@ tshark -i r1-eth0 -i r1-eth1 -Y "ipv6.routing.type == 4" -c 4
 
 ---
 
-<!-- _class: divider -->
-
-# Exercise
-
-Same as Lab 3 — add the reverse service chain
-
----
-
-<!-- _class: independent compact -->
-
-# Exercise — Tasks
-
-Install the reverse SRv6 route so `h2 → mb2 → mb1 → h1`:
-
-1. **Fill in the two blanks** in `exercises/reverse_route.sh`, then run:
-
-   ```bash
-   sudo bash exercises/reverse_route.sh
-   ```
-
-2. **Verify:**
-
-   ```bash
-   sudo python3 exercises/verify.py
-   ```
-
-> **Stuck?** Compare with `solutions/reverse_route.sh`
-
----
-
 <!-- _class: independent compact -->
 
 # Troubleshooting
 
-| Symptom                              | Fix                                                                              |
-| ------------------------------------ | -------------------------------------------------------------------------------- |
-| `devices` empty after topology start | wait a few seconds, retry; confirm ONOS is running                               |
-| `pingall` fails entirely             | check `onos> apps -a -s` — openflow and fwd must be active                       |
-| `ping6 fc00::2` fails                | run `cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true` in ONOS |
-| `flows` shows only IPv4 rules        | same as above — `ipv6Forwarding` is off by default                               |
-| IDS log empty after steering         | confirm the route uses `mode encap` and includes `fc00::b2`                      |
-| `flows` empty after pingall          | fwd or proxyarp may not be active — re-activate and retry                        |
+| Symptom                              | Fix                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `devices` empty after topology start | wait a few seconds, retry; confirm ONOS is running                                         |
+| `pingall` fails entirely             | check `onos> apps -s -a` — openflow and fwd must be active                                 |
+| `ping6 fc00::2` fails                | check `cfg get org.onosproject.fwd.ReactiveForwarding` — `ipv6Forwarding` should be `true` |
+| `flows` shows only IPv4 rules        | same as above — verify `ipv6Forwarding` is enabled in the ONOS config                      |
+| IDS log empty after steering         | confirm the route uses `mode encap` and includes `fc00::b2`                                |
+| `flows` empty after pingall          | fwd or proxyarp may not be active — check ONOS apps and retry                              |
 
 ---
 
@@ -525,9 +549,10 @@ Install the reverse SRv6 route so `h2 → mb2 → mb1 → h1`:
 
 In this lab you confirmed that:
 
-- ONOS's `fwd` app is purely L2 (`ETH_TYPE + ETH_SRC + ETH_DST`) — no IP address matching regardless of flags
-- By default it only intercepts `ETH_TYPE:ipv4`; enabling `ipv6Forwarding true` adds `ETH_TYPE:ipv6` to the intercepted set without changing the match fields
-- Path steering is entirely a host-level operation — the controller never inspects or programs the SRH
-- Combining ONOS control-plane visibility with host-level SRv6 steering is a valid architecture
+- an SRv6 segment list can force traffic through explicit waypoints before it reaches the destination
+- the existing network fabric can carry the outer IPv6 packets used by SRv6
+- the reverse direction needs its own segment list as well
 
-> **Key insight** ONOS matches only on `ETH_TYPE + ETH_SRC + ETH_DST` — the SRH and the IPv6 addresses are invisible to the switch. SRv6 path decisions live entirely on the hosts, letting you override ONOS's hop-count routing with any path you choose.
+> **Optional extension** If you continued to Exercise 2, adding `r1` as a segment moved traffic onto the lower-latency path and cut RTT from about 60 ms to about 20 ms.
+
+> **Key insight** SRv6 keeps the path decision in the segment list. In this lab that lets you express the service chain, and in the optional extension it also lets you express the lower-latency alternate path.

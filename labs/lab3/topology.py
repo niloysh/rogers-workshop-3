@@ -2,7 +2,7 @@
 """
 topology.py
 ────────────────
-Lab 3 topology — SRv6 Service Function Chaining with ONOS.
+Lab 3 topology — SRv6 Service Function Chaining.
 
 Two OpenFlow switches carry the baseline path between h1 and h2.
 A dual-homed Linux host, r1, adds an alternate path between s1 and s2.
@@ -14,9 +14,9 @@ Link delays are asymmetric on purpose:
   - s1 ─[30ms]─ s2   direct path, intentionally slow
   - s1 ─[5ms]─ r1 ─[5ms]─ s2   alternate path, faster
 
-Without SRv6 ONOS routes h1→h2 via the direct s1-s2 link (fewer hops).
-SRv6 encap on h1 forces the outer packet through r1, taking the lower-
-latency alternate path despite the extra hop.
+Without SRv6, the baseline forwarding fabric carries h1→h2 via the
+direct s1-s2 link. SRv6 encap on h1 forces the outer packet through r1,
+taking the lower-latency alternate path despite the extra hop.
 
 Physical layout:
 
@@ -94,7 +94,7 @@ class Lab3Topo(Topo):
         self.addLink(mb1, s2,  cls=TCLink, bw=LINK_BW_MBPS)
         self.addLink(mb2, s2,  cls=TCLink, bw=LINK_BW_MBPS)
 
-        # Direct inter-switch link — high delay (default ONOS path)
+        # Direct inter-switch link — high delay (default baseline path)
         self.addLink(s1,  s2,  cls=TCLink, bw=LINK_BW_MBPS, delay=DIRECT_DELAY)
 
         # Alternate path through r1 — low delay (SRv6 steered path)
@@ -105,7 +105,7 @@ class Lab3Topo(Topo):
 
 def print_topology_info():
     print("\n" + "═" * 60)
-    print("  Lab 3 — SRv6 Service Chaining with ONOS")
+    print("  Lab 3 — SRv6 Service Chaining")
     print("═" * 60)
     print(f"""
     h1 ── s1 ──[{DIRECT_DELAY}]── s2 ── h2
