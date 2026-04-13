@@ -8,8 +8,8 @@ paginate: true
 
 <span class="tag">Lab 4</span>
 
-# Transport Slice Requests
-# with ONOS and SRv6
+# Putting it all together
+# Transport Slicing
 
 Rogers Executive Workshop 3 — Transport Network
 
@@ -27,212 +27,137 @@ What this lab teaches and how to work through it
 
 In this lab you will:
 
-- observe contention on a shared bottleneck
-- run one guided demo of a bandwidth-protected slice
-- express slice requirements by editing a small `SLICE_REQUEST`
+- observe how contention on a shared bottleneck degrades **both** bandwidth and latency
+- run one guided demo of a transport slice
+- express slice requirements by editing a short `SLICE_REQUEST` block
 - ask for a low-latency path, a service chain, and an admissible bandwidth request
-- watch the controller realize each request with SRv6 routes and, when needed, an OVS queue
+- watch the controller realize each request automatically
 
-> **What to focus on** In this lab, you are not programming the controller directly. You describe the service you want, and the controller realizes it.
+> **What to focus on** Nothing here is a new transport mechanism. Lab 4 puts together the ideas from Labs 1 to 3 behind one higher-level interface: you describe the slice you want, and the transport slice controller realizes it.
 
 ---
 
+<!-- _class: compact -->
+
 # From earlier labs to Lab 4
 
-| Lab    | What you learned                 | What Lab 4 reuses                             |
-| ------ | -------------------------------- | --------------------------------------------- |
-| Lab 1  | OVS and match/action forwarding  | OVS queues to reserve bandwidth               |
-| Lab 2  | ONOS as the control plane        | ONOS-managed switches                         |
-| Lab 3  | SRv6 steering with ONOS          | service chaining plus low-latency path steering |
-| Lab 4  | **this lab**                     | combines these into one slice-request workflow |
+- **Lab 1** showed that the network does not have to treat every flow the same way. Transport can give different traffic different treatment.
+- **Lab 2** added the control-plane view. Instead of configuring one device in isolation, we can realize policy across a topology.
+- **Lab 3** added explicit path control. Traffic does not have to follow the default path; it can be steered through chosen waypoints and along a chosen route.
+- **Lab 4** turns those ideas into one abstraction: a **transport slice** is a service request that asks for both a path and a treatment.
 
-> **The change in Lab 4** You no longer type low-level queue or SRv6 commands in the exercises. You edit a short request file.
+> **Putting it together** Nothing in this lab is conceptually new in the data plane. The transport slice controller is the "putting it together" piece: it takes the mechanisms you already used in Labs 1 to 3 and realizes them together from one higher-level request.
+
+---
+
+<!-- _class: compact -->
+
+# How the controller puts it together
+
+<div class="slide-figure">
+  <img src="../../assets/figures/lab4-controller-overview.svg" alt="High-level overview showing a slice request feeding the transport slice controller, which reuses the ideas from Labs 1 to 3 to realize a slice with a chosen path, chosen waypoints, and chosen treatment." />
+</div>
+
+> **High level** The request is new. The underlying ingredients are the same ones you already used in the earlier labs.
 
 ---
 
 # Lab 4 topology
 
-```text
-                               mb1   mb2
-                                |     |
-                                +--+--+
-                                   |
-    h1 ---.
-          +-- s1 --[30ms, 10Mbps]--- s2 --- h2
-    h3 ---'   |                      |
-              +---------[5ms]--- r1 ---[5ms]
-```
+<div class="topology-figure compact">
+  <img src="../../assets/figures/lab4-slice-topology.svg" alt="Lab 4 topology with h1 and h3 attached to s1, h2 plus mb1 and mb2 attached to s2, and dual-homed router r1 providing a faster alternate path between the two switches." />
+</div>
 
-| Node | Role                    | IPv4     | SID / Note                     |
-| ---- | ----------------------- | -------- | ------------------------------ |
-| h1   | source                  | 10.0.0.1 | `fc00::1`                      |
-| h2   | destination             | 10.0.0.2 | `fc00::2`                      |
-| h3   | competing flow          | 10.0.0.3 | `fc00::3`                      |
-| mb1  | telemetry monitor       | 10.0.0.4 | `fc00::b1`                     |
-| mb2  | security inspector      | 10.0.0.5 | `fc00::b2`                     |
-| r1   | alternate-path router   | 10.0.0.6 | `fc00::a1` / `fc00::a2`        |
+`h1` source · `h2` destination · `h3` competing flow · `mb1` telemetry · `mb2` security · `r1` alternate-path router
 
-> **Key idea** The direct `s1-s2` path is slower and bandwidth-limited. The path via `r1` is faster, but ONOS does not choose it by default.
+> **Key idea** The direct `s1→s2` path is slower and bandwidth-limited. The `r1` path is faster and uncongested, but ONOS does not choose it by default.
 
 ---
-
-# Two contracts in this lab
-
-Every slice request can affect two things:
-
-**Path / service contract**
-- implemented with SRv6
-- decides which path traffic takes
-- decides which waypoints traffic must visit
-
-**Bandwidth contract**
-- implemented with an OVS HTB queue
-- reserves bandwidth on the direct bottleneck when requested
-
-> **Simple rule** SRv6 decides *where* traffic goes. The queue decides *how much bottleneck bandwidth* is reserved.
-
----
-
-# What you edit
-
-The learner-facing object is always:
-
-```python
-SLICE_REQUEST = {
-    "name": "premium",
-    "src": "h1",
-    "dst": "h2",
-    "latency_objective": "standard",
-    "bandwidth_mbps": 8,
-    "waypoints": ["mb1"],
-}
-```
-
-You only edit this block in the exercise request files.
-
-> **Do not start in `_internal/`** That folder contains the controller and helper code. The pedagogical focus is the request.
-
----
-
-# What each field means
-
-| Field | Meaning | Notes |
-| ----- | ------- | ----- |
-| `latency_objective` | path objective | `"standard"` or `"low"` |
-| `bandwidth_mbps` | reserved bandwidth | `0` means best-effort |
-| `waypoints` | ordered service functions | e.g. `["mb1"]`, `["mb1", "mb2"]` |
-
-Important details:
-
-- `latency_objective="low"` is a qualitative goal, not a numeric latency guarantee
-- in this topology, `"low"` is realized by steering via `r1`
-- `waypoints` lists the service functions in order
-- learners never need to type `r1` or `r1b` directly
-
----
-
-# Request vs realization
-
-**What you request**
-
-```python
-SLICE_REQUEST = {
-    "name": "express",
-    "src": "h1",
-    "dst": "h2",
-    "latency_objective": "low",
-    "bandwidth_mbps": 0,
-    "waypoints": ["mb1"],
-}
-```
-
-**What the controller realizes**
-
-- forward path: `h1 -> r1 -> mb1 -> h2`
-- reverse path: `h2 -> mb1 -> r1b -> h1`
-- queue guarantee: `none`
-
-> **This is the abstraction boundary** Learners edit the request. The controller expands it into forward and reverse SRv6 routes and, if needed, a bandwidth reservation.
-
----
-
 # What the middleboxes do
 
-`mb1` = telemetry monitor
-- reports observed slice throughput
-- helps confirm that traffic really visited the waypoint
+**`mb1` — telemetry monitor**
+Reports observed throughput of traffic that visits it.
+Its log lighting up confirms traffic really took the requested waypoint.
 
-`mb2` = security inspector
-- inspects the inner flow
-- reports `[OK]` or `[ALERT]`
-- gives Exercise 2 a clearly different service function
+**`mb2` — security inspector**
+Inspects the inner flow and reports `[OK]` or `[ALERT]`.
+It gives Exercise 2 a clearly different service function from Exercise 1.
 
-> **The logs are part of the lesson** If a middlebox log lights up, the request's path and waypoint requirements are being realized.
+> The middlebox logs are part of the lesson. If a log lights up, the slice's waypoint requirement is being realized.
+
+---
+
+# What a slice request looks like
+
+The transport slice controller uses the same mechanisms you learned in Labs 1 to 3, but it exposes a higher-level interface. Instead of configuring each mechanism separately, every exercise asks you to edit one `SLICE_REQUEST` block in a `slice_request.py` file:
+
+```python
+SLICE_REQUEST = {
+    "name":               "express",
+    "src":                "h1",
+    "dst":                "h2",
+    "latency_objective":  "standard",   # "standard" | "low"
+    "bandwidth_mbps":     0,            # 0 = best-effort, 1–10 = reserved
+    "waypoints":          ["mb1"],      # [] | ["mb1"] | ["mb2"] | ["mb1","mb2"]
+}
+```
+
+> **What changes in Lab 4 is the interface** You are not editing the queueing, ONOS, or SRv6 logic directly. You describe the slice you want in one request, and the controller realizes it using those same underlying mechanisms.
 
 ---
 
 <!-- _class: compact -->
 
-# Before you start
+# Before you start (1/2)
 
-Open fresh terminals and work from:
+**First: clean up Lab 3 completely.**
+
+1. Exit any running Mininet (`Ctrl+D` or `exit` in the Mininet terminal)
+2. Run `sudo mn -c` in a terminal
+3. Close all Lab 3 terminals
+
+Then work from:
 
 ```bash
 cd ~/labs/lab4
 ```
 
-Suggested terminals:
+> **Stay in `labs/lab4` for every command in this lab.**
 
-| Terminal | Purpose |
-| -------- | ------- |
-| 1 | demo or exercise runner |
-| 2 | ONOS CLI |
-| 3 | `tail -F /tmp/iperf_h1.log` |
-| 4 | `tail -F /tmp/iperf_h3.log` |
-| 5 | middlebox log: `tail -F /tmp/mb1_bandwidth.log` or `tail -F /tmp/mb2_security.log` |
+Make sure ONOS is running. As done previously, open the ONOS CLI from a new terminal using `ssh`:
+
+```bash
+ssh -p 8101 -o HostKeyAlgorithms=+ssh-rsa onos@localhost
+# password: rocks
+```
 
 ---
 
 <!-- _class: compact -->
 
-# ONOS prerequisites
+# Before you start (2/2)
 
-Make sure ONOS is running, then confirm these apps:
-
-```text
-onos> app activate org.onosproject.openflow
-onos> app activate org.onosproject.fwd
-onos> app activate org.onosproject.proxyarp
-```
-
-Then enable IPv6 forwarding in `fwd`:
+From the ONOS CLI, verify the required apps are active:
 
 ```text
-onos> cfg set org.onosproject.fwd.ReactiveForwarding ipv6Forwarding true
+onos> apps -s -a
 ```
 
-> **Without `ipv6Forwarding true`** the switches will not forward the outer SRv6 IPv6 packets correctly.
+You should see these three in the list:
 
----
+```text
+org.onosproject.openflow
+org.onosproject.fwd
+org.onosproject.proxyarp
+```
 
-# Files you will use
+Then verify that IPv6 forwarding is enabled in `fwd`:
 
-| File | Purpose |
-| ---- | ------- |
-| `demo/run.py` | instructor-led guided demo runner |
-| `demo/slice_request.py` | fixed request to inspect during the demo |
-| `exercises/part1/run.py` | low-latency exercise runner |
-| `exercises/part1/slice_request.py` | file learners edit for Part 1 |
-| `exercises/part2/run.py` | service-chain exercise runner |
-| `exercises/part2/slice_request.py` | file learners edit for Part 2 |
-| `exercises/part3/run.py` | admission-control exercise runner |
-| `exercises/part3/slice_request.py` | file learners edit for Part 3 |
+```text
+onos> cfg get org.onosproject.fwd.ReactiveForwarding
+```
 
-Solutions:
-
-- `solutions/part1/slice_request.py`
-- `solutions/part2/slice_request.py`
-- `solutions/part3/slice_request.py`
+Look for `ipv6Forwarding` in the output — it should show `true`. If it does not, the switches will not forward SRv6 packets correctly.
 
 ---
 
@@ -252,77 +177,9 @@ From `~/labs/lab4`:
 sudo python3 demo/run.py
 ```
 
-This demo uses a fixed request in:
+The demo uses a **fixed** request in `demo/slice_request.py` — you will be asked to open and read it, but not edit it.
 
-```text
-demo/slice_request.py
-```
-
-> **What it teaches** A slice can keep the standard path, require a waypoint, and reserve bandwidth at the same time.
-
----
-
-# Demo phases
-
-The demo walks through four phases:
-
-```text
-Phase 1 — Baseline
-  h1 sends to h2 on the direct path.
-  mb1 is silent.
-
-Phase 2 — Contention
-  h3 joins.
-  h1 and h3 share the 10 Mbps bottleneck.
-
-Stop and inspect the request
-  the runner asks you to open `demo/slice_request.py`
-  and predict what will happen before the slice is applied.
-
-Phase 3 — Slice active
-  h1 still uses the direct path,
-  but now traffic must visit mb1
-  and h1 gets an 8 Mbps guarantee.
-
-Phase 4 — Teardown
-  the path and bandwidth guarantees disappear.
-```
-
----
-
-# What the demo proves
-
-When the slice is active, two things change:
-
-```text
-/tmp/iperf_h1.log         ~5 Mbps  ->  ~8 Mbps
-/tmp/mb1_bandwidth.log    silent   ->  traffic
-```
-
-That means:
-
-- the bandwidth contract is active
-- the waypoint contract is active
-
-When the slice is removed, both revert.
-
-> **One request, two effects** The slice changes both the path/service behavior and the bandwidth treatment.
-
----
-
-<!-- _class: compact -->
-
-# Connecting the Dots
-
-What you just saw in the demo is the previous labs working together:
-
-| What you observed | What made it happen | Which earlier lab |
-| ----------------- | ------------------- | ----------------- |
-| `h1` recovered from ~5 Mbps to ~8 Mbps | programmable traffic treatment on the bottleneck | Lab 1 |
-| one service request was translated into concrete network actions | the transport slice controller follows the SDN controller principle and uses ONOS-managed switches underneath | Lab 2 |
-| `mb1` started seeing traffic | SRv6 forced traffic through an explicit waypoint | Lab 3 |
-
-> **The key idea** Lab 4 is not a separate mechanism. It combines programmable data-plane behavior, controller-driven realization, and SRv6 path steering into one service request.
+The runner walks through four phases and pauses at each one. Follow along in the log files.
 
 ---
 
@@ -330,210 +187,97 @@ What you just saw in the demo is the previous labs working together:
 
 # Exercises
 
-Each part follows the same simple workflow
-
 ---
 
-# Exercise workflow
+# How exercises work
 
-For every part:
+1. From `~/labs/lab4`, run:
+   ```bash
+   sudo python3 exercises/partX/run.py
+   ```
+2. The runner starts the network, configures SRv6, and starts traffic automatically — so you can **see the problem first**
+3. When the runner pauses, open `exercises/partX/slice_request.py` and edit the `SLICE_REQUEST` block
+4. Press ENTER — the runner reloads your file and validates it
+5. The slice is applied and you observe the effect
+6. The slice is torn down so you can see the behavior revert
 
-1. run the part's `run.py`
-2. the runner starts the lab and prints which `slice_request.py` to edit
-3. edit only the `SLICE_REQUEST` block
-4. come back and press ENTER
-5. the runner reloads your request from disk and validates it
+If a request is invalid or rejected, the runner prints the error and waits for you to edit and retry.
 
-If the request is invalid, the runner prints the error and waits for you to edit the file again.
-
-> **This is intentional** You should be thinking about the service request, not the Mininet or controller boilerplate.
-
----
-
-# Exercise 1
-
-Low-latency path request
+> The file already contains the full schema with valid values for every field — you do not need to look anything up elsewhere.
 
 ---
 
 <!-- _class: compact -->
 
-# Exercise 1 — Goal and command
+# Exercise 1 — Low-latency path
 
-Goal:
+> ⚠️ **Before starting:** `mininet> exit` → `sudo mn -c` → `cd ~/labs/lab4`
 
-- ask for a lower-latency service from `h1` to `h2`
-- keep the telemetry monitor in the chain
-- keep it best-effort
+**Goal:** ask for a lower-latency service from `h1` to `h2` while keeping the telemetry monitor in the chain.
 
-Run:
+The runner shows you contention first, then asks you to edit `exercises/part1/slice_request.py`.
 
 ```bash
 sudo python3 exercises/part1/run.py
 ```
 
-Edit when prompted:
+> Solution: `solutions/part1/slice_request.py`
 
-```text
-exercises/part1/slice_request.py
-```
+Watch these logs:
 
-Watch as well:
-
-```text
+```bash
+tail -F /tmp/iperf_h1.log
+tail -F /tmp/iperf_h3.log
 tail -F /tmp/ping_h1_h2.log
+tail -F /tmp/mb1_bandwidth.log
 ```
 
-The runner restarts the ping at each phase change so you see fresh RTT samples.
-
-> **What to predict first** If `h1` moves off the direct bottleneck, what should happen to `h3`'s throughput?
-
 ---
 
 <!-- _class: compact -->
 
-# Exercise 1 — What to look for
+# Exercise 2 — Service chain
 
-- `h1` should move to the faster path via `r1`
-- `h3` should remain on the direct `s1-s2` bottleneck
-- `/tmp/ping_h1_h2.log` should settle near ~20 ms after the low-latency request is applied
-- after teardown, the ping should rise again toward the higher baseline RTT
-- `mb1` should still log the slice traffic
-- no queue is reserved, so this is a path objective, not a bandwidth guarantee
+> ⚠️ **Before starting:** `mininet> exit` → `sudo mn -c` → `cd ~/labs/lab4`
 
-> **Concept** `latency_objective="low"` changes the path realization, not the requested bandwidth.
-
----
-
-# Exercise 2
-
-Service-chain request
-
----
-
-<!-- _class: compact -->
-
-# Exercise 2 — Goal and command
-
-Goal:
-
-- keep the standard path
-- keep the traffic best-effort
-- satisfy this service requirement:
+**Goal:** keep the standard path and best-effort bandwidth, but route traffic through both middleboxes in this order:
 
 ```text
-telemetry monitor -> security inspector -> destination
+telemetry monitor → security inspector → destination
 ```
 
-Run:
+The runner starts traffic first, then asks you to edit `exercises/part2/slice_request.py`.
 
 ```bash
 sudo python3 exercises/part2/run.py
 ```
 
-Edit when prompted:
-
-```text
-exercises/part2/slice_request.py
-```
-
----
-
-<!-- _class: compact -->
-
-# Exercise 2 — What to look for
-
-- both `mb1` and `mb2` logs should light up
-- `h1` and `h3` should still compete on the direct bottleneck
-- the latency objective should remain standard
-
-> **Concept** `waypoints` expresses the service chain. It does not, by itself, ask for a lower-latency path or a bandwidth reservation.
-
----
-
-# Exercise 3
-
-Admission control
-
----
-
-<!-- _class: compact -->
-
-# Exercise 3 — Goal and command
-
-The runner first installs a fixed premium request for `h1`:
-
-```python
-{
-    "latency_objective": "standard",
-    "bandwidth_mbps": 8,
-    "waypoints": ["mb1"],
-}
-```
-
-Then you edit a competing request for `h3`.
-
-Run:
+Watch these logs:
 
 ```bash
-sudo python3 exercises/part3/run.py
+tail -F /tmp/iperf_h1.log
+tail -F /tmp/iperf_h3.log
+tail -F /tmp/mb1_bandwidth.log
+tail -F /tmp/mb2_security.log
 ```
-
-Edit when prompted:
-
-```text
-exercises/part3/slice_request.py
-```
-
-If the request is rejected, edit the same file and retry.
-The runner keeps the baseline slice active and loops until your request is admitted.
 
 ---
 
 <!-- _class: compact -->
 
-# Exercise 3 — Capacity reasoning
+# Exercise 3 — Admission control
 
-The direct bottleneck capacity is `10 Mbps`.
+> ⚠️ **Before starting:** `mininet> exit` → `sudo mn -c` → `cd ~/labs/lab4`
 
-If `8 Mbps` is already reserved for the premium slice, then:
+The runner installs a fixed 8 Mbps slice for `h1`, then asks you to submit a competing request for `h3`. It retries until your request is admitted.
 
-```text
-10 Mbps total - 8 Mbps reserved = 2 Mbps remaining
+```bash
+sudo python3 exercises/part3/run.py   # edit exercises/part3/slice_request.py when prompted
 ```
 
-So:
+This controller uses first-come-first-served: the baseline slice keeps its reservation and your request is evaluated only against what remains. That raises a useful question — **what if the second request were actually more important?** A smarter controller might weigh priority, preemption, or SLA tier.
 
-- a new reservation above `2 Mbps` must be rejected
-- `2 Mbps` or less can be admitted
-- best-effort traffic is not the same as a reservation
-
-> **Concept** Admission control is about finite resources. A request can be valid in structure and still be rejected by policy.
-
----
-
-<!-- _class: compact -->
-
-# Beyond First-Come-First-Served
-
-In this exercise, the baseline premium slice arrives first and keeps its reservation.
-
-The second request is evaluated only against the remaining capacity.
-
-That is simple and easy to reason about, but it raises a useful question:
-
-**What if the second request were actually more premium than the first one?**
-
-Then a better admission controller might need to consider:
-
-- slice priority or service class
-- preemption policy
-- business value or SLA importance
-- predicted future demand
-
-Further reading:
-
-- M. Sulaiman et al., *Coordinated Slicing and Admission Control using Multi-Agent Deep Reinforcement Learning*, IEEE TNSM, 20(2), June 2023.
+Further reading: M. Sulaiman et al., *Coordinated Slicing and Admission Control using Multi-Agent Deep Reinforcement Learning*, IEEE TNSM, 20(2), 2023.
 
 ---
 
@@ -541,24 +285,29 @@ Further reading:
 
 # Troubleshooting
 
-| Symptom | What to check |
-| ------- | ------------- |
-| switches do not forward SRv6 traffic | `ipv6Forwarding true` in ONOS |
-| request will not load | edit only `SLICE_REQUEST` and keep it a Python dictionary |
-| middlebox log stays idle | confirm the request really includes that waypoint |
-| low-latency result not visible | check whether the request asks for `latency_objective: "low"` |
-| admission request rejected | compare requested bandwidth with remaining capacity |
+**The runner hangs or pingAll fails at startup.**
+Restart ONOS: `sudo docker restart onos`. Wait 2–3 minutes, then rerun.
+
+**Switches are not forwarding traffic.**
+Check that `ipv6Forwarding` is `true`: `cfg get org.onosproject.fwd.ReactiveForwarding`
+
+**The request file won't load.**
+Edit only the `SLICE_REQUEST` block and keep it a valid Python dictionary.
+
+**A middlebox log stays silent.**
+Confirm that middlebox is listed in `waypoints` in your request.
+
+**The runner fails with `RTNETLINK answers: File exists` or similar.**
+A previous Mininet run was not cleaned up. Run `sudo mn -c` and restart from `~/labs/lab4`.
 
 ---
 
 # Summary
 
-In this lab you:
+Lab 4 is where Labs 1–3 come together to illustrate the **concepts** behind simple transport slicing:
 
-- used a learner-facing request to describe a transport slice
-- saw how path objectives, service chains, and bandwidth requests are separate ideas
-- used SRv6 to realize path and waypoint requirements
-- used an OVS queue to realize a bandwidth contract
-- saw admission control reject a request that exceeded the remaining budget
+- **Lab 1** — programmable match/action rules steer traffic to the right queue
+- **Lab 2** — an SDN controller translates one service request into concrete switch rules
+- **Lab 3** — SRv6 steers traffic onto the right path and through the right waypoints
 
-> **Big picture** The value of slicing is not the syntax of the controller API. It is the ability to describe the service you want and reason about how the network realizes it.
+A single request expressing a path objective, a service chain, and a bandwidth guarantee — and a controller that realizes it.
