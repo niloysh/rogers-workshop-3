@@ -32,21 +32,24 @@ layout: page
 .materials-link svg{width:12px;height:12px;flex-shrink:0;vertical-align:middle}
 .quick-links{margin-top:32px;padding-top:24px;border-top:1px solid #e4e2da}
 .quick-links-intro{font-size:14px;color:#6b6860;line-height:1.7;margin:0 0 14px}
-.quick-links-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
-.quick-link{display:block;text-decoration:none;padding:16px 18px;border-radius:8px;border-left:3px solid #e4e2da;border-top:1px solid #e4e2da;border-right:1px solid #e4e2da;border-bottom:1px solid #e4e2da;background:#faf9f6;transition:transform .12s ease,border-color .12s ease,background .12s ease,box-shadow .12s ease}
+.quick-links-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px}
+.quick-link{display:block;text-decoration:none;padding:13px 14px;border-radius:8px;border-left:3px solid #e4e2da;border-top:1px solid #e4e2da;border-right:1px solid #e4e2da;border-bottom:1px solid #e4e2da;background:#faf9f6;transition:transform .12s ease,border-color .12s ease,background .12s ease,box-shadow .12s ease}
 .quick-link:hover{transform:translateY(-1px);border-left-color:#6b6860;border-top-color:#d5d1c6;border-right-color:#d5d1c6;border-bottom-color:#d5d1c6;background:white;box-shadow:0 6px 16px rgba(26,25,23,.05)}
-.quick-link-title{display:block;font-size:14px;font-weight:600;color:#1a1917;margin-bottom:6px}
-.quick-link-desc{display:block;font-size:13px;color:#6b6860;line-height:1.55}
-.quick-link.setup{border-left-color:#4a3f8f;background:#eeedf8}
-.quick-link.setup .quick-link-title{color:#4a3f8f}
-.quick-link.reference{border-left-color:#1a6b57;background:#e4f2ed}
-.quick-link.reference .quick-link-title{color:#1a6b57}
-.quick-link.feedback{border-left-color:#7a6a2e;background:#f5f0e0}
-.quick-link.feedback .quick-link-title{color:#7a6a2e}
+.quick-link-title{display:block;font-size:13px;font-weight:600;color:#1a1917;margin-bottom:4px}
+.quick-link-desc{display:block;font-size:12px;color:#6b6860;line-height:1.45}
+.quick-link.setup{border-left-color:#38556f;background:#e5edf3}
+.quick-link.setup .quick-link-title{color:#38556f}
+.quick-link.reference{border-left-color:#6a5d4d;background:#f1ece5}
+.quick-link.reference .quick-link-title{color:#6a5d4d}
+.quick-link.outcomes{border-left-color:#8a4d45;background:#f4e6e2}
+.quick-link.outcomes .quick-link-title{color:#8a4d45}
+.quick-link.feedback{border-left-color:#4a4a4a;background:#ececec}
+.quick-link.feedback .quick-link-title{color:#3a3a3a}
 .quick-links-secondary{font-size:13px;color:#6b6860;line-height:1.65;margin:14px 0 0}
 .quick-links-secondary a{color:#3a3a3a;text-decoration:underline;text-underline-offset:2px}
 .quick-links-secondary a:hover{color:#1a1917}
-@media(max-width:600px){.schedule-row{grid-template-columns:52px 1fr 52px}.schedule-block{padding:12px 14px}}
+@media(max-width:980px){.quick-links-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.schedule-row{grid-template-columns:52px 1fr 52px}.schedule-block{padding:12px 14px}.quick-links-grid{grid-template-columns:1fr}}
 </style>
 
 Welcome to **Workshop 3** in the Rogers Executive Workshop Series, presented as part of the [Rogers Chair in Network Automation](https://rboutaba.cs.uwaterloo.ca/).
@@ -216,7 +219,7 @@ In this third workshop, we turn our attention to the transport network, which in
     <span class="quick-link-title">Basic Linux commands</span>
     <span class="quick-link-desc">A compact reference for the shell, Mininet, ONOS, and OVS commands used in the labs.</span>
   </a>
-  <a class="quick-link reference" href="learning-outcomes">
+  <a class="quick-link outcomes" href="learning-outcomes">
     <span class="quick-link-title">Learning outcomes</span>
     <span class="quick-link-desc">See what participants should understand and be able to do by the end of Workshop 3.</span>
   </a>
