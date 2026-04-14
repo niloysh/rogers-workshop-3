@@ -3,38 +3,82 @@ layout: page
 permalink: /further-reading/
 ---
 
+<style>
+.reading-groups { margin-top: 8px; }
+.reading-group {
+  margin-bottom: 28px;
+  padding: 20px 24px;
+  border-radius: 8px;
+  border-left: 3px solid #e4e2da;
+  background: #faf9f6;
+}
+.reading-group h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #3a3a3a;
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+  font-family: inherit;
+}
+.reading-group p {
+  font-size: 14px;
+  color: #4a4740;
+  line-height: 1.7;
+  margin: 0 0 12px;
+}
+.reading-group p:last-child { margin-bottom: 0; }
+.reading-group.monitoring { border-left-color: #4a3f8f; background: #eeedf8; }
+.reading-group.monitoring h3 { color: #4a3f8f; }
+.reading-group.telemetry { border-left-color: #1a6b57; background: #e4f2ed; }
+.reading-group.telemetry h3 { color: #1a6b57; }
+.reading-group.offloading { border-left-color: #7a6a2e; background: #f5f0e0; }
+.reading-group.offloading h3 { color: #7a6a2e; }
+.reading-group.ran { border-left-color: #3a3a3a; background: #efefef; }
+.reading-group.ran h3 { color: #3a3a3a; }
+.intro-text { font-size: 14px; color: #6b6860; margin-bottom: 24px; line-height: 1.7; }
+.paper-title { font-weight: 600; color: #1a1917; }
+.paper-meta { color: #6b6860; }
+.paper-link a {
+  color: #3a3a3a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.paper-link a:hover { color: #1a1917; }
+</style>
+
 # Further Reading
 
-Workshop 3 explores network programmability through OVS, ONOS, and SRv6. Another direction is to make the forwarding plane itself more programmable. Languages such as P4 (Programming Protocol-independent Packet Processors) let designers specify how packets are parsed, measured, and processed inside switches or NICs, which can enable richer telemetry, finer-grained anomaly detection, and selective function offloading in 5G networks.
+<p class="intro-text">Workshop 3 explores transport network programmability through OVS, ONOS, and SRv6. Another direction is to make the forwarding plane itself more programmable. Languages such as Programming Protocol-independent Packet Processors (P4) let designers specify how packets are parsed, measured, and processed inside switches or NICs, which can enable richer telemetry, finer-grained anomaly detection, and selective function offloading in 5G networks.</p>
 
-### Slice Monitoring
+<div class="reading-groups">
 
-**Dynamic SLA-aware Network Slice Monitoring**  
-N. Saha, M. T. Arashloo, N. Shahriar, R. Boutaba. ACM SIGMETRICS '26. Ann Arbor, Michigan, USA. June 8-12, 2026.  
-[Read the paper (PDF)](https://rboutaba.cs.uwaterloo.ca/Papers/2026/saha-sigmetrics26.pdf)
+  <div class="reading-group monitoring">
+    <h3>Slice Monitoring</h3>
+    <p><span class="paper-title">Dynamic SLA-aware Network Slice Monitoring</span><br><span class="paper-meta">N. Saha, M. T. Arashloo, N. Shahriar, R. Boutaba. ACM SIGMETRICS '26. Ann Arbor, Michigan, USA. June 8-12, 2026.</span></p>
+    <p class="paper-link"><a href="https://rboutaba.cs.uwaterloo.ca/Papers/2026/saha-sigmetrics26.pdf">Read the paper (PDF)</a></p>
+    <p>This connects naturally to Lab 4's slice-monitoring theme: once a slice has been provisioned, how should the network observe whether its SLA is actually being met, and how should monitoring adapt as slice conditions change?</p>
+  </div>
 
-This connects naturally to Lab 4's slice-monitoring theme: once a slice has been provisioned, how should the network observe whether its SLA is actually being met, and how should monitoring adapt as slice conditions change?
+  <div class="reading-group telemetry">
+    <h3>Fine-Grained Telemetry And Anomaly Detection</h3>
+    <p><span class="paper-title">Rethinking Telemetry Design for Fine-Grained Anomaly Detection in 5G User Planes</span><br><span class="paper-meta">N. Saha, N. Limam, Y. Xiao, R. Boutaba. IEEE/IFIP Network Operations and Management Symposium (NOMS). Rome, Italy. May 18-22, 2026.</span></p>
+    <p class="paper-link"><a href="https://rboutaba.cs.uwaterloo.ca/Papers/2026/saha-noms26.pdf">Read the paper (PDF)</a></p>
+    <p>This extends the workshop's telemetry story toward anomaly detection in the user plane. It asks what kind of telemetry is detailed enough to expose transient or slice-specific anomalies without overwhelming the network with monitoring overhead.</p>
+  </div>
 
-### Fine-Grained Telemetry And Anomaly Detection
+  <div class="reading-group offloading">
+    <h3>Programmable Data Planes And Offloading</h3>
+    <p><span class="paper-title">Blink: A P4-Based 5G Centralized Unit</span><br><span class="paper-meta">M. Rouili, R. Boutaba. IEEE/IFIP Network Operations and Management Symposium (NOMS). Honolulu, HI, USA. May 12-16, 2025.</span></p>
+    <p class="paper-link"><a href="https://rboutaba.cs.uwaterloo.ca/Papers/Conferences/2023/rouili-blink-noms25.pdf">Read the paper (PDF)</a></p>
+    <p>This paper shows how programmable data planes can support 5G functions directly. It is a good example of offloading part of the packet-processing work when performance or timing constraints make a purely software design less attractive.</p>
+  </div>
 
-**Rethinking Telemetry Design for Fine-Grained Anomaly Detection in 5G User Planes**  
-N. Saha, N. Limam, Y. Xiao, R. Boutaba. IEEE/IFIP Network Operations and Management Symposium (NOMS). Rome, Italy. May 18-22, 2026.  
-[Read the paper (PDF)](https://rboutaba.cs.uwaterloo.ca/Papers/2026/saha-noms26.pdf)
+  <div class="reading-group ran">
+    <h3>Real-Time Detection In Open RAN</h3>
+    <p><span class="paper-title">RAID: In-Network RA Signaling Storm Detection for 5G Open RAN</span><br><span class="paper-meta">M. Rouili, Y. Xiao, S. Liu, R. Boutaba.</span></p>
+    <p class="paper-link"><a href="https://rboutaba.cs.uwaterloo.ca/Papers/2026/rouili-noms26.pdf">Read the paper (PDF)</a></p>
+    <p>This paper shows how P4-programmable switches can help protect O-RAN control planes by detecting and filtering malicious RA signaling directly in the network, before those requests overwhelm the Central Unit.</p>
+  </div>
 
-This extends the workshop's telemetry story toward anomaly detection in the user plane. It asks what kind of telemetry is detailed enough to expose transient or slice-specific anomalies without overwhelming the network with monitoring overhead.
-
-### Programmable Data Planes And Offloading
-
-**Blink: A P4-Based 5G Centralized Unit**  
-M. Rouili, R. Boutaba. IEEE/IFIP Network Operations and Management Symposium (NOMS). Honolulu, HI, USA. May 12-16, 2025.  
-[Read the paper (PDF)](https://rboutaba.cs.uwaterloo.ca/Papers/Conferences/2023/rouili-blink-noms25.pdf)
-
-This paper shows how programmable data planes can support 5G functions directly. It is a good example of offloading part of the packet-processing work when performance or timing constraints make a purely software design less attractive.
-
-### Real-Time Detection In Open RAN
-
-**RAID: In-Network RA Signaling Storm Detection for 5G Open RAN**  
-M. Rouili, Y. Xiao, S. Liu, R. Boutaba.  
-[Read the paper (PDF)](https://rboutaba.cs.uwaterloo.ca/Papers/2026/rouili-noms26.pdf)
-
-This paper shows how P4-programmable switches can help protect O-RAN control planes by detecting and filtering malicious RA signaling directly in the network, before those requests overwhelm the Central Unit.
+</div>

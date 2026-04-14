@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 920 520"
+   role="img"
+   aria-labelledby="title desc"
+   version="1.1"
+   xmlns="http://www.w3.org/2000/svg">
+  <title id="title">Intent reroutes around a failed link</title>
+  <desc id="desc">Triangle topology where the direct s1 to s2 link is marked as failed and traffic between h1 and h2 reroutes through s3.</desc>
+  <defs>
+    <style>
+      .bg { fill: #fcfbf8; }
+      .base-link { stroke: #aab3bb; stroke-width: 10; stroke-linecap: round; fill: none; }
+      .active-link { stroke: #0d6a59; stroke-width: 12; stroke-linecap: round; fill: none; }
+      .failed-link { stroke: #b4432c; stroke-width: 10; stroke-linecap: round; fill: none; stroke-dasharray: 18 14; }
+      .host { fill: #e4f1ec; stroke: #0d6a59; stroke-width: 4; }
+      .switch { fill: #e9eef2; stroke: #33424f; stroke-width: 4; }
+      .label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 28px; font-weight: 700; fill: #181b1f; dominant-baseline: middle; text-anchor: middle; }
+      .caption { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 24px; font-weight: 700; fill: #181b1f; text-anchor: middle; }
+      .note { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 20px; font-weight: 600; fill: #505861; text-anchor: middle; }
+      .badge { fill: #f7ebe7; stroke: #b4432c; stroke-width: 3; }
+      .badge-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 18px; font-weight: 700; fill: #8d2e19; text-anchor: middle; dominant-baseline: middle; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="920" height="520" rx="28" />
+
+  <path class="base-link" d="M170 130 H300" />
+  <path class="failed-link" d="M410 130 H510" />
+  <path class="base-link" d="M620 130 H750" />
+  <path class="active-link" d="M345 175 L438 268" />
+  <path class="active-link" d="M565 175 L448 268" />
+  <path class="base-link" d="M448 358 V430" />
+
+  <rect class="host" x="80" y="92" width="90" height="76" rx="18" />
+  <text class="label" x="125" y="130">h1</text>
+
+  <rect class="switch" x="300" y="85" width="110" height="90" rx="18" />
+  <text class="label" x="355" y="130">s1</text>
+
+  <rect class="switch" x="510" y="85" width="110" height="90" rx="18" />
+  <text class="label" x="565" y="130">s2</text>
+
+  <rect class="host" x="750" y="92" width="90" height="76" rx="18" />
+  <text class="label" x="795" y="130">h2</text>
+
+  <rect class="switch" x="393" y="268" width="110" height="90" rx="18" />
+  <text class="label" x="448" y="313">s3</text>
+
+  <rect class="host" x="403" y="430" width="90" height="76" rx="18" />
+  <text class="label" x="448" y="468">h3</text>
+
+  <rect class="badge" x="405" y="62" width="120" height="40" rx="16" />
+  <text class="badge-text" x="465" y="82">link down</text>
+
+  <text class="caption" x="460" y="36">the intent stays installed and ONOS moves traffic to the alternate path</text>
+  <text class="note" x="460" y="392">rerouted path: s1 → s3 → s2</text>
+</svg>

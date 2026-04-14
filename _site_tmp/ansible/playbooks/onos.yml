@@ -1,0 +1,105 @@
+# playbooks/onos.yml
+---
+- name: Install ONOS (Docker)
+  hosts: workshop_vms
+  become: true
+  gather_facts: false
+
+  vars:
+    onos_version: "2.7.0"
+
+  tasks:
+    - name: Stop and disable openvswitch-testcontroller if present
+      ansible.builtin.systemd:
+        name: openvswitch-testcontroller
+        state: stopped
+        enabled: false
+      failed_when: false
+
+    - name: Ensure port 6653 is free
+      ansible.builtin.shell: |
+        pid=$(ss -tlnp | grep ':6653' | grep -oP 'pid=\K[0-9]+')
+        [ -n "$pid" ] && kill -9 "$pid" || true
+      changed_when: false
+
+    - name: Pull ONOS Docker image
+      community.docker.docker_image:
+        name: onosproject/onos
+        tag: "{{ onos_version }}"
+        source: pull
+
+    - name: Run ONOS container
+      community.docker.docker_container:
+        name: onos
+        image: "onosproject/onos:{{ onos_version }}"
+        state: started
+        restart_policy: unless-stopped
+        published_ports:
+          - "6640:6640"   # OVSDB
+          - "6653:6653"   # OpenFlow
+          - "8101:8101"   # ONOS CLI
+          - "8181:8181"   # REST API + GUI
+          - "9876:9876"   # ONOS cluster
+        volumes:
+          - "onos_data:/root/onos/apache-karaf-4.2.14/data"
+        env:
+          ONOS_APPS: "drivers,openflow,fwd,proxyarp,segmentrouting,tunnel"
+
+    - name: Wait for ONOS REST API
+      ansible.builtin.uri:
+        url: "http://localhost:8181/onos/v1/applications"
+        method: GET
+        user: onos
+        password: rocks
+        force_basic_auth: true
+        status_code: 200
+      register: onos_api
+      retries: 20
+      delay: 15
+      until: onos_api.status == 200
+
+    - name: Activate ONOS apps
+      ansible.builtin.uri:
+        url: "http://localhost:8181/onos/v1/applications/{{ item }}/active"
+        method: POST
+        user: onos
+        password: rocks
+        force_basic_auth: true
+        status_code: [200, 204]
+      loop:
+        - org.onosproject.openflow
+        - org.onosproject.fwd
+        - org.onosproject.proxyarp
+
+    - name: Configure ONOS reactive forwarding for IPv6
+      ansible.builtin.uri:
+        url: "http://localhost:8181/onos/v1/configuration/org.onosproject.fwd.ReactiveForwarding?preset=true"
+        method: POST
+        user: onos
+        password: rocks
+        force_basic_auth: true
+        body_format: json
+        body:
+          ipv6Forwarding: "true"
+        status_code: 200
+
+    - name: Verify ONOS reactive forwarding IPv6 config
+      ansible.builtin.uri:
+        url: "http://localhost:8181/onos/v1/configuration/org.onosproject.fwd.ReactiveForwarding"
+        method: GET
+        user: onos
+        password: rocks
+        force_basic_auth: true
+        status_code: 200
+      register: onos_fwd_config
+      retries: 10
+      delay: 1
+      until: onos_fwd_config.json['org.onosproject.fwd.ReactiveForwarding'].ipv6Forwarding == 'true'
+
+    - name: Print ONOS access info
+      ansible.builtin.debug:
+        msg:
+          - "GUI  → http://{{ ansible_host }}:8181/onos/ui  (onos / rocks)"
+          - "CLI  → ssh -p 8101 onos@{{ ansible_host }}     (password: rocks)"
+          - "REST → http://{{ ansible_host }}:8181/onos/v1/"
+          - "Logs → docker logs -f onos"

@@ -1,0 +1,6 @@
+# playbooks/site.yml
+---
+- import_playbook: docker.yml
+- import_playbook: mininet.yml
+- import_playbook: onos.yml
+- import_playbook: workshop_tools.yml

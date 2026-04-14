@@ -1,0 +1,606 @@
+<!-- _class: title -->
+
+<p><span class="tag">Lab 3</span></p>
+
+<h1 id="srv6-path-steering">SRv6 Path Steering</h1>
+<h1 id="and-service-function-chaining">and Service Function Chaining</h1>
+
+<p>Rogers Executive Workshop 3 — Transport Network</p>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="getting-started">Getting Started</h1>
+
+<p>The topology and what we are trying to show</p>
+
+<hr />
+
+<h1 id="lab-3-at-a-glance">Lab 3 at a glance</h1>
+
+<p>In this lab you will:</p>
+
+<ul>
+  <li>start a topology with two service waypoints off the direct path</li>
+  <li>enable SRv6 on each host and assign Segment IDs</li>
+  <li>show that normal routing bypasses both service functions</li>
+  <li>program an SRv6 encapsulation route to chain traffic through them</li>
+  <li>observe the IDS log tunneled HTTP requests at the second waypoint</li>
+</ul>
+
+<blockquote>
+  <p><strong>Goal</strong> Understand how SRv6 steers traffic through an explicit sequence of nodes — without a controller touching the switches.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="lab-3-topology">Lab 3 topology</h1>
+
+<div class="topology-figure compact">
+  <img src="../../assets/figures/lab3-service-chain-topology.svg" alt="Lab 3 topology with h1 connected to s1, s1 connected to s2, h2 connected to s2, and both service nodes mb1 and mb2 attached directly to s2." />
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Node</th>
+      <th>Role</th>
+      <th>IPv4</th>
+      <th>SRv6 SID</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>h1</td>
+      <td>Traffic source</td>
+      <td>10.0.0.1</td>
+      <td>fc00::1</td>
+    </tr>
+    <tr>
+      <td>h2</td>
+      <td>Traffic destination</td>
+      <td>10.0.0.2</td>
+      <td>fc00::2</td>
+    </tr>
+    <tr>
+      <td>mb1</td>
+      <td>Waypoint 1</td>
+      <td>10.0.0.3</td>
+      <td>fc00::b1</td>
+    </tr>
+    <tr>
+      <td>mb2</td>
+      <td>IDS / waypoint 2</td>
+      <td>10.0.0.4</td>
+      <td>fc00::b2</td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p><strong>The key detail</strong> Without SRv6, <code class="language-plaintext highlighter-rouge">h1 → s1 → s2 → h2</code> completely bypasses <code class="language-plaintext highlighter-rouge">mb1</code> and <code class="language-plaintext highlighter-rouge">mb2</code>. SRv6 encap forces the packet to visit both before it reaches <code class="language-plaintext highlighter-rouge">h2</code>.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="service-chain-behaviour">Service chain behaviour</h1>
+
+<p>Two service nodes sit off the direct path — traffic only visits them if SRv6 steers it there.</p>
+
+<p><strong>mb1 — waypoint 1</strong></p>
+<ul>
+  <li>first hop in the SRv6 segment list</li>
+  <li>forwards the outer SRv6 packet toward <code class="language-plaintext highlighter-rouge">mb2</code></li>
+  <li>a good place to observe the SRH with <code class="language-plaintext highlighter-rouge">tshark</code></li>
+</ul>
+
+<p><strong>mb2 — IDS (Intrusion Detection System)</strong></p>
+<ul>
+  <li>passively inspects tunneled HTTP requests</li>
+  <li>prints <code class="language-plaintext highlighter-rouge">[OK]</code> for normal requests, <code class="language-plaintext highlighter-rouge">[ALERT]</code> for suspicious URLs (e.g. <code class="language-plaintext highlighter-rouge">/malware</code>, <code class="language-plaintext highlighter-rouge">/exploit</code>)</li>
+  <li>always lets traffic pass — it detects but does not block</li>
+</ul>
+
+<blockquote>
+  <p><strong>Without the service chain</strong> malicious requests reach <code class="language-plaintext highlighter-rouge">h2</code> undetected. With SRv6 encap, every request must pass through <code class="language-plaintext highlighter-rouge">mb2</code> first.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="before-you-start">Before you start</h1>
+
+<p><strong>First: clean up Lab 2 completely.</strong></p>
+
+<ol>
+  <li>Exit any running Mininet (<code class="language-plaintext highlighter-rouge">Ctrl+D</code> or <code class="language-plaintext highlighter-rouge">exit</code> in the Mininet terminal)</li>
+  <li>Run <code class="language-plaintext highlighter-rouge">sudo mn -c</code> in a terminal</li>
+  <li>Close all Lab 2 terminals</li>
+</ol>
+
+<p>Then open <strong>four fresh terminals</strong>.</p>
+
+<p><strong>In every terminal, start in the Lab 3 folder:</strong></p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> ~/labs/lab3
+</code></pre></div></div>
+
+<p>Use the terminals like this:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Terminal</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1 — Mininet</td>
+      <td>start topology, run host commands</td>
+    </tr>
+    <tr>
+      <td>2 — h2 HTTP server</td>
+      <td><code class="language-plaintext highlighter-rouge">./run_h2_http_server.sh</code></td>
+    </tr>
+    <tr>
+      <td>3 — mb2 IDS</td>
+      <td><code class="language-plaintext highlighter-rouge">./run_mb2_ids.sh</code></td>
+    </tr>
+    <tr>
+      <td>4 — Shell</td>
+      <td><code class="language-plaintext highlighter-rouge">exercises/verify.py</code>, <code class="language-plaintext highlighter-rouge">./enter_host.sh</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">sudo</code> is required for Mininet</li>
+</ul>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="start-and-verify">Start and verify</h1>
+
+<p>Start Mininet in terminal 1. This creates the topology and gives you the CLI you will use for the rest of the lab:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 topology.py
+</code></pre></div></div>
+
+<p>Before touching SRv6, confirm the plain network works end to end:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; pingall
+</code></pre></div></div>
+
+<p>Then start the HTTP server in terminal 2 so <code class="language-plaintext highlighter-rouge">h2</code> is ready for the traffic tests that follow:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./run_h2_http_server.sh
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Why this order?</strong> First prove the baseline network works, then bring up the application, then add SRv6 steering. Lab 3 does not use ONOS — the steering behavior comes from Linux routing on the hosts.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="srv6-setup">SRv6 Setup</h1>
+
+<p>Enable IPv6 SIDs first, then compare before and after steering</p>
+
+<hr />
+
+<h1 id="set-up-srv6-on-every-host">Set up SRv6 on every host</h1>
+
+<p>Instead of typing the same setup four times, you will use the helper script <code class="language-plaintext highlighter-rouge">configure_srv6.py</code>. It applies these three steps on each host:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>sysctl -w net.ipv6.conf.all.forwarding=1
+sysctl -w net.ipv6.conf.all.seg6_enabled=1
+sysctl -w net.ipv6.conf.&lt;iface&gt;.seg6_enabled=1
+ip -6 addr add &lt;SID&gt;/128 dev &lt;iface&gt;
+</code></pre></div></div>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">forwarding=1</code> — allows the host to forward IPv6 packets, not just originate them</li>
+  <li><code class="language-plaintext highlighter-rouge">seg6_enabled=1</code> — tells the Linux kernel to process Segment Routing Headers (SRH)</li>
+  <li><code class="language-plaintext highlighter-rouge">&lt;SID&gt;/128</code> — assigns the host’s Segment ID; this is the address the segment list will reference</li>
+</ul>
+
+<blockquote>
+  <p><strong>Every host in the chain needs the same three steps</strong> — the SID address is the only thing that changes.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="apply-the-same-setup-to-all-hosts">Apply the same setup to all hosts</h1>
+
+<p>Run the helper script to configure all hosts at once. From terminal 4:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python3 configure_srv6.py
+</code></pre></div></div>
+
+<p>It applies the same three-step pattern to every host:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Host</th>
+      <th>SID</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">h1</code></td>
+      <td><code class="language-plaintext highlighter-rouge">fc00::1</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">h2</code></td>
+      <td><code class="language-plaintext highlighter-rouge">fc00::2</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">mb1</code></td>
+      <td><code class="language-plaintext highlighter-rouge">fc00::b1</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">mb2</code></td>
+      <td><code class="language-plaintext highlighter-rouge">fc00::b2</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<blockquote>
+  <p><strong>The script also adds an on-link route for <code class="language-plaintext highlighter-rouge">fc00::/64</code></strong> so all SIDs are mutually reachable across the switched topology.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="verify-sid-reachability">Verify SID reachability</h1>
+
+<p>Confirm all SIDs are reachable from <code class="language-plaintext highlighter-rouge">h1</code> before adding any steering rules:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 ping6 -c 2 fc00::2     # h1 → h2
+mininet&gt; h1 ping6 -c 2 fc00::b1    # h1 → mb1
+mininet&gt; h1 ping6 -c 2 fc00::b2    # h1 → mb2
+</code></pre></div></div>
+
+<p>All three should succeed. If any fail, check that <code class="language-plaintext highlighter-rouge">seg6_enabled</code> and <code class="language-plaintext highlighter-rouge">forwarding</code> are set on that host:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 sysctl net.ipv6.conf.all.seg6_enabled
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Note</strong> The application traffic in this lab stays as ordinary IPv4. SRv6 is the outer transport — <code class="language-plaintext highlighter-rouge">encap</code> wraps the IPv4 packet inside an IPv6+SRH header to steer it through the chain.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="baseline">Baseline</h1>
+
+<p>Before adding an SRv6 tunnel route, confirm plain IPv4 still bypasses the service chain</p>
+
+<hr />
+
+<h1 id="confirm-the-default-ipv4-path-bypasses-mb1-and-mb2">Confirm the default IPv4 path bypasses mb1 and mb2</h1>
+
+<p>SRv6 is enabled on the hosts, but no steering rule has been added yet — traffic still takes the direct <code class="language-plaintext highlighter-rouge">h1 → s1 → s2 → h2</code> path.</p>
+
+<p>First, start the IDS in terminal 3 so you can see what it captures:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./run_mb2_ids.sh
+</code></pre></div></div>
+
+<p>Then send a suspicious request from <code class="language-plaintext highlighter-rouge">h1</code>:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 curl http://10.0.0.2/malware
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Expected</strong> <code class="language-plaintext highlighter-rouge">h2</code> responds and <code class="language-plaintext highlighter-rouge">mb2</code> prints <strong>nothing</strong> — the request never passed through the IDS. This is the baseline: without SRv6 steering, the service chain is completely invisible to the traffic.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="path-steering">Path Steering</h1>
+
+<p>Programming the service chain with SRv6</p>
+
+<hr />
+
+<h1 id="what-changes-with-srv6-steering">What changes with SRv6 steering</h1>
+
+<p>Before path steering:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>h1  ───────────────&gt;  h2
+     direct IPv4 path
+</code></pre></div></div>
+
+<p>After adding the SRv6 encap route on <code class="language-plaintext highlighter-rouge">h1</code>:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>h1  ──&gt;  mb1  ──&gt;  mb2  ──&gt;  h2
+        waypoint    IDS
+</code></pre></div></div>
+
+<p>The application request itself does not change:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>GET /index.html   to   10.0.0.2
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Only the route on <code class="language-plaintext highlighter-rouge">h1</code> changes</strong> — <code class="language-plaintext highlighter-rouge">encap</code> wraps the original IPv4 request in a new outer IPv6+SRH packet and steers it through <code class="language-plaintext highlighter-rouge">mb1</code> then <code class="language-plaintext highlighter-rouge">mb2</code> before it reaches <code class="language-plaintext highlighter-rouge">h2</code>.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="anatomy-of-the-encapsulated-packet">Anatomy of the encapsulated packet</h1>
+
+<p>Conceptually, the steered packet looks like:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Outer IPv6 header
+  src: fc00::1
+  current destination: fc00::b1
+
+SRH waypoint list
+  1. fc00::b1   (mb1)
+  2. fc00::b2   (mb2)
+  final destination: fc00::2   (h2)
+
+Inner IPv4 packet
+  original destination: 10.0.0.2
+
+Payload
+  GET /index.html
+</code></pre></div></div>
+
+<ul>
+  <li>at <code class="language-plaintext highlighter-rouge">mb1</code>, the SRH advances and the packet is forwarded to <code class="language-plaintext highlighter-rouge">mb2</code></li>
+  <li>at <code class="language-plaintext highlighter-rouge">mb2</code>, the SRH advances to the final segment <code class="language-plaintext highlighter-rouge">fc00::2</code></li>
+  <li>at <code class="language-plaintext highlighter-rouge">h2</code>, the outer SRv6 wrapper is stripped and the original packet is delivered</li>
+  <li>the inner HTTP request is unchanged throughout</li>
+</ul>
+
+<blockquote>
+  <p><strong><code class="language-plaintext highlighter-rouge">encap</code> preserves the original packet</strong> — SRv6 adds an outer IPv6+SRH wrapper that steers the traffic, then disappears at the final destination.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="program-the-service-chain">Program the service chain</h1>
+
+<p>On <code class="language-plaintext highlighter-rouge">h1</code>, install the SRv6 encap route that steers traffic through <code class="language-plaintext highlighter-rouge">mb1</code> then <code class="language-plaintext highlighter-rouge">mb2</code>:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 ip route add 10.0.0.2 encap seg6 mode encap segs fc00::b1,fc00::b2,fc00::2 dev h1-eth0
+</code></pre></div></div>
+
+<p>Verify the route was added:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 ip route show
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Reading the segment list</strong> <code class="language-plaintext highlighter-rouge">fc00::b1,fc00::b2,fc00::2</code> — visit <code class="language-plaintext highlighter-rouge">mb1</code> first, then <code class="language-plaintext highlighter-rouge">mb2</code>, then deliver to <code class="language-plaintext highlighter-rouge">h2</code>. Any IPv4 traffic from <code class="language-plaintext highlighter-rouge">h1</code> to <code class="language-plaintext highlighter-rouge">10.0.0.2</code> will now be wrapped and steered through this chain.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="test-the-service-chain">Test the service chain</h1>
+
+<p>Send a normal request and watch terminal 3:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 curl http://10.0.0.2/index.html
+</code></pre></div></div>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[HH:MM:SS] [mb2 IDS] [OK]    10.0.0.1 → 10.0.0.2 — GET /index.html HTTP/1.1
+</code></pre></div></div>
+
+<p>Now send a suspicious one:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 curl http://10.0.0.2/malware
+</code></pre></div></div>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>[HH:MM:SS] [mb2 IDS] [ALERT] 10.0.0.1 → 10.0.0.2 — GET /malware HTTP/1.1
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Both requests passed through <code class="language-plaintext highlighter-rouge">mb2</code></strong> — the IDS can inspect the tunneled HTTP payload and classify it, even though the original traffic is wrapped in an SRv6 outer packet. <code class="language-plaintext highlighter-rouge">h2</code> still responds in both cases; the IDS detects but does not block.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="inspect-the-outer-srv6-packet-with-tshark">Inspect the outer SRv6 packet with tshark</h1>
+
+<p>From terminal 4, open a shell inside <code class="language-plaintext highlighter-rouge">mb1</code> and start capturing:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./enter_host.sh mb1
+tshark <span class="nt">-i</span> mb1-eth0 <span class="nt">-Y</span> <span class="s2">"ipv6.routing.type == 4"</span> <span class="nt">-V</span> <span class="nt">-c</span> 1
+</code></pre></div></div>
+
+<p>Then trigger a request from Mininet:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 curl http://10.0.0.2/test
+</code></pre></div></div>
+
+<p>Look for the Segment Routing Header in the capture:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Routing Header (Type 4 - Segment Routing)
+  Segments Left: 2 or 1
+  Last Entry: 2
+  Address[0]: fc00::2    ← final destination (h2)
+  Address[1]: fc00::b2   ← second waypoint (mb2)
+  Address[2]: fc00::b1   ← first waypoint (mb1)
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>This is the outer packet</strong> — the SRH is part of the IPv6 transport wrapper. The original IPv4 request to <code class="language-plaintext highlighter-rouge">10.0.0.2</code> is carried inside it, invisible to the switches.</p>
+</blockquote>
+
+<hr />
+
+<h1 id="remove-the-route--confirm-bypass">Remove the route — confirm bypass</h1>
+
+<p>Remove the SRv6 steering route:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 ip route del 10.0.0.2
+</code></pre></div></div>
+
+<p>Send the same malicious request again:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 curl http://10.0.0.2/malware
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Expected</strong> <code class="language-plaintext highlighter-rouge">h2</code> responds, but <code class="language-plaintext highlighter-rouge">mb2</code> prints <strong>nothing</strong> — without the SRv6 route, traffic falls back to the direct path and bypasses the service chain entirely. The IDS never sees the request.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="exercises">Exercises</h1>
+
+<p>Adding the reverse service chain</p>
+
+<hr />
+
+<!-- _class: independent compact -->
+
+<h1 id="exercise">Exercise</h1>
+
+<p>The guided section established the forward chain:</p>
+
+<p><strong>h1 → mb1 → mb2 → h2</strong></p>
+
+<p>Your goal is to add the reverse:</p>
+
+<p><strong>h2 → mb2 → mb1 → h1</strong></p>
+
+<p>Right now <code class="language-plaintext highlighter-rouge">h2</code> sends replies directly back to <code class="language-plaintext highlighter-rouge">h1</code>, bypassing the service chain entirely. Install an SRv6 route on <code class="language-plaintext highlighter-rouge">h2</code> so that return traffic also passes through <code class="language-plaintext highlighter-rouge">mb2</code> and <code class="language-plaintext highlighter-rouge">mb1</code>.</p>
+
+<hr />
+
+<!-- _class: independent compact -->
+
+<h1 id="exercise--observe-the-problem">Exercise — Observe The Problem</h1>
+
+<p>From terminal 4, make sure you are in <code class="language-plaintext highlighter-rouge">~/labs/lab3</code>, then open a shell inside <code class="language-plaintext highlighter-rouge">mb1</code> and start an ICMP capture:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./enter_host.sh mb1
+tshark <span class="nt">-i</span> mb1-eth0 <span class="nt">-Y</span> <span class="s2">"icmp &amp;&amp; ip.addr==10.0.0.1 &amp;&amp; ip.addr==10.0.0.2"</span>
+</code></pre></div></div>
+
+<p>Then from Mininet send exactly one ping. After it finishes, return to the <code class="language-plaintext highlighter-rouge">tshark</code> terminal and stop the capture with <code class="language-plaintext highlighter-rouge">Ctrl+C</code>:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mininet&gt; h1 ping -c 1 10.0.0.2
+</code></pre></div></div>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>10.0.0.1 -&gt; 10.0.0.2   ICMP Echo (ping) request
+</code></pre></div></div>
+
+<blockquote>
+  <p><strong>Expected</strong> <code class="language-plaintext highlighter-rouge">mb1</code> sees the request, but not the reply. That shows the forward path is steered through <code class="language-plaintext highlighter-rouge">mb1</code>, while the return path still bypasses it.</p>
+</blockquote>
+
+<hr />
+
+<!-- _class: independent compact -->
+
+<h1 id="exercise--tasks">Exercise — Tasks</h1>
+
+<ol>
+  <li>
+    <p><strong>Fill in the two blanks</strong> in <code class="language-plaintext highlighter-rouge">exercises/reverse_route.sh</code>, then run:</p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>bash exercises/reverse_route.sh
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p><strong>Verify:</strong></p>
+
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 exercises/verify.py
+</code></pre></div>    </div>
+  </li>
+</ol>
+
+<blockquote>
+  <p><strong>Stuck?</strong> Compare with <code class="language-plaintext highlighter-rouge">solutions/reverse_route.sh</code></p>
+</blockquote>
+
+<hr />
+
+<!-- _class: independent compact -->
+
+<h1 id="troubleshooting">Troubleshooting</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Symptom</th>
+      <th>Fix</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">ping6 fc00::2</code> fails after setup</td>
+      <td>recheck <code class="language-plaintext highlighter-rouge">seg6_enabled</code> and SID assignment on all hosts</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">curl http://10.0.0.2/...</code> fails</td>
+      <td>restart with <code class="language-plaintext highlighter-rouge">./run_h2_http_server.sh</code></td>
+    </tr>
+    <tr>
+      <td>IDS log is empty</td>
+      <td>restart with <code class="language-plaintext highlighter-rouge">./run_mb2_ids.sh</code> before sending traffic</td>
+    </tr>
+    <tr>
+      <td>verify shows reverse route missing</td>
+      <td>check the DESTINATION and SEGS blanks in <code class="language-plaintext highlighter-rouge">reverse_route.sh</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">tshark</code> shows no SRH</td>
+      <td>confirm route uses <code class="language-plaintext highlighter-rouge">mode encap</code> and the segs include <code class="language-plaintext highlighter-rouge">fc00::1</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<!-- _class: independent compact -->
+
+<h1 id="hints">Hints</h1>
+
+<ul>
+  <li><strong>Destination</strong> — <code class="language-plaintext highlighter-rouge">h1</code>’s IPv4 address is <code class="language-plaintext highlighter-rouge">10.0.0.1</code></li>
+  <li><strong>Segs order</strong> — for <code class="language-plaintext highlighter-rouge">h2 → mb2 → mb1 → h1</code>, the list is <code class="language-plaintext highlighter-rouge">fc00::b2,fc00::b1,fc00::1</code></li>
+  <li><strong>Re-check with <code class="language-plaintext highlighter-rouge">tshark</code></strong> — after <code class="language-plaintext highlighter-rouge">verify.py</code> passes, repeat the ICMP capture from the earlier slide. This time <code class="language-plaintext highlighter-rouge">mb1</code> should see both the request and the reply.</li>
+</ul>
+
+<hr />
+
+<h1 id="summary">Summary</h1>
+
+<p>In this lab you:</p>
+
+<ul>
+  <li>showed that normal routing bypasses service functions entirely</li>
+  <li>enabled SRv6 on Linux hosts and assigned Segment IDs</li>
+  <li>programmed a two-node service chain using SRv6 <code class="language-plaintext highlighter-rouge">encap</code></li>
+  <li>inspected the outer SRv6 packet in transit with <code class="language-plaintext highlighter-rouge">tshark</code></li>
+  <li>watched the IDS detect a request tunneled inside the SRv6 wrapper</li>
+  <li>confirmed that removing the route immediately bypasses the chain</li>
+</ul>
+
+<blockquote>
+  <p><strong>Coming up</strong> Lab 4 automates what you did manually here — the SliceController programs SRv6 routes and combines them with OVS bandwidth reservation to provision complete transport slices.</p>
+</blockquote>

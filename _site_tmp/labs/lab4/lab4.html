@@ -1,0 +1,328 @@
+<!-- _class: title -->
+
+<p><span class="tag">Lab 4</span></p>
+
+<h1 id="putting-it-all-together-transport-slicing">Putting it all together: Transport Slicing</h1>
+
+<p>Rogers Executive Workshop 3 — Transport Network</p>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="getting-started">Getting Started</h1>
+
+<p>Connecting the ideas from Labs 1 through 3</p>
+
+<hr />
+
+<h1 id="lab-4-at-a-glance">Lab 4 at a glance</h1>
+
+<p>In this lab you will:</p>
+
+<ul>
+  <li>observe how contention on a shared bottleneck degrades <strong>both</strong> bandwidth and latency</li>
+  <li>run one guided demo of a transport slice</li>
+  <li>express slice requirements by editing a short <code class="language-plaintext highlighter-rouge">SLICE_REQUEST</code> block</li>
+  <li>ask for a low-latency path, a service chain, and an admissible bandwidth request</li>
+  <li>watch the controller realize each request automatically</li>
+</ul>
+
+<blockquote class="info">Nothing here is a new transport mechanism. Lab 4 puts together the ideas from Labs 1 to 3 behind one higher-level interface: you describe the slice you want, and the transport slice controller realizes it.</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="from-earlier-labs-to-lab-4">From earlier labs to Lab 4</h1>
+
+<ul>
+  <li><strong>Lab 1</strong> showed that the network does not have to treat every flow the same way. Transport can give different traffic different treatment.</li>
+  <li><strong>Lab 2</strong> added the control-plane view. Instead of configuring one device in isolation, we can realize policy across a topology.</li>
+  <li><strong>Lab 3</strong> added explicit path control. Traffic does not have to follow the default path; it can be steered through chosen waypoints and along a chosen route.</li>
+  <li><strong>Lab 4</strong> turns those ideas into one abstraction: a <strong>transport slice</strong> is a service request that asks for both a path and a treatment.</li>
+</ul>
+
+<blockquote class="info">Nothing in this lab is conceptually new in the data plane. The transport slice controller is the "putting it together" piece: it takes the mechanisms you already used in Labs 1 to 3 and realizes them together from one higher-level request.</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="how-the-controller-puts-it-together">How the controller puts it together</h1>
+
+<div class="slide-figure">
+  <img src="../../assets/figures/lab4-controller-overview.svg" alt="High-level overview showing a slice request feeding the transport slice controller, which reuses the ideas from Labs 1 to 3 to realize a slice with a chosen path, chosen waypoints, and chosen treatment." />
+</div>
+
+<blockquote class="info">The request is new. The underlying ingredients are the same ones you already used in the earlier labs.</blockquote>
+
+<blockquote class="tip">The transport slice controller code is in the <code>_internal</code> directory. If you are curious, check out how it uses the mechanims from Labs 1 through 3. Note that you do not need edit or change it.</blockquote>
+
+<hr />
+
+<h1 id="lab-4-topology">Lab 4 topology</h1>
+
+<div class="topology-figure compact">
+  <img src="../../assets/figures/lab4-slice-topology.svg" alt="Lab 4 topology with h1 and h3 attached to s1, h2 plus mb1 and mb2 attached to s2, and dual-homed router r1 providing a faster alternate path between the two switches." />
+</div>
+
+<p><code class="language-plaintext highlighter-rouge">h1</code> source · <code class="language-plaintext highlighter-rouge">h2</code> destination · <code class="language-plaintext highlighter-rouge">h3</code> competing flow · <code class="language-plaintext highlighter-rouge">mb1</code> telemetry · <code class="language-plaintext highlighter-rouge">mb2</code> security · <code class="language-plaintext highlighter-rouge">r1</code> alternate-path router</p>
+
+<blockquote class="tip">The direct <code>s1→s2</code> path is slower and bandwidth-limited. The <code>r1</code> path is faster and uncongested, but ONOS does not choose it by default.</blockquote>
+
+<hr />
+<h1 id="what-the-middleboxes-do">What the middleboxes do</h1>
+
+<p><strong><code class="language-plaintext highlighter-rouge">mb1</code> — telemetry monitor</strong>
+Reports observed throughput of traffic that visits it.
+Its log lighting up confirms traffic really took the requested waypoint.</p>
+
+<p><strong><code class="language-plaintext highlighter-rouge">mb2</code> — security inspector</strong>
+Inspects the inner flow and reports <code class="language-plaintext highlighter-rouge">[OK]</code> or <code class="language-plaintext highlighter-rouge">[ALERT]</code>.</p>
+
+<blockquote class="tip">The middlebox logs are useful to check if traffic is flowing through the chain. If a log lights up, the slice's waypoint requirement is being realized.</blockquote>
+
+<hr />
+
+<h1 id="what-a-slice-request-looks-like">What a slice request looks like</h1>
+
+<p>The transport slice controller uses the same mechanisms you learned in Labs 1 to 3, but it exposes a higher-level interface. Instead of configuring each mechanism separately, every exercise asks you to edit one <code class="language-plaintext highlighter-rouge">SLICE_REQUEST</code> block in a <code class="language-plaintext highlighter-rouge">slice_request.py</code> file:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">SLICE_REQUEST</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="sh">"</span><span class="s">name</span><span class="sh">"</span><span class="p">:</span>               <span class="sh">"</span><span class="s">express</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">src</span><span class="sh">"</span><span class="p">:</span>                <span class="sh">"</span><span class="s">h1</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">dst</span><span class="sh">"</span><span class="p">:</span>                <span class="sh">"</span><span class="s">h2</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">latency_objective</span><span class="sh">"</span><span class="p">:</span>  <span class="sh">"</span><span class="s">standard</span><span class="sh">"</span><span class="p">,</span>   <span class="c1"># "standard" | "low"
+</span>    <span class="sh">"</span><span class="s">bandwidth_mbps</span><span class="sh">"</span><span class="p">:</span>     <span class="mi">0</span><span class="p">,</span>            <span class="c1"># 0 = best-effort, 1–10 = reserved
+</span>    <span class="sh">"</span><span class="s">waypoints</span><span class="sh">"</span><span class="p">:</span>          <span class="p">[</span><span class="sh">"</span><span class="s">mb1</span><span class="sh">"</span><span class="p">],</span>      <span class="c1"># [] | ["mb1"] | ["mb2"] | ["mb1","mb2"]
+</span><span class="p">}</span>
+</code></pre></div></div>
+
+<blockquote class="info">You are not editing the queueing, ONOS, or SRv6 logic directly. You describe the slice you want in one request, and the controller realizes it using those same underlying mechanisms.</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="before-you-start-12">Before you start (1/2)</h1>
+
+<p><strong>First: clean up Lab 3 completely.</strong></p>
+
+<ol>
+  <li>Exit any running Mininet (<code class="language-plaintext highlighter-rouge">Ctrl+D</code> or <code class="language-plaintext highlighter-rouge">exit</code> in the Mininet terminal)</li>
+  <li>Run <code class="language-plaintext highlighter-rouge">sudo mn -c</code> in a terminal</li>
+  <li>Close all Lab 3 terminals</li>
+</ol>
+
+<p>Then work from:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> ~/labs/lab4
+</code></pre></div></div>
+
+<blockquote class="warning">Stay in <code>labs/lab4</code> for every command in this lab.</blockquote>
+
+<p>Make sure ONOS is running. As done previously, open the ONOS CLI from a new terminal using <code class="language-plaintext highlighter-rouge">ssh</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>ssh <span class="nt">-p</span> 8101 <span class="nt">-o</span> <span class="nv">HostKeyAlgorithms</span><span class="o">=</span>+ssh-rsa onos@localhost
+<span class="c"># password: rocks</span>
+</code></pre></div></div>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="before-you-start-22">Before you start (2/2)</h1>
+
+<p>From the ONOS CLI, verify the required apps are active:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>onos&gt; apps -s -a
+</code></pre></div></div>
+
+<p>You should see these three in the list:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>org.onosproject.openflow
+org.onosproject.fwd
+org.onosproject.proxyarp
+</code></pre></div></div>
+
+<p>Then verify that IPv6 forwarding is enabled in <code class="language-plaintext highlighter-rouge">fwd</code>:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>onos&gt; cfg get org.onosproject.fwd.ReactiveForwarding
+</code></pre></div></div>
+
+<p>Look for <code class="language-plaintext highlighter-rouge">ipv6Forwarding</code> in the output — it should show <code class="language-plaintext highlighter-rouge">true</code>. If it does not, the switches will not forward SRv6 packets correctly.</p>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="the-demo">The Demo</h1>
+
+<p>One guided example before the exercises</p>
+
+<hr />
+
+<h1 id="run-the-demo">Run the demo</h1>
+
+<p>From <code class="language-plaintext highlighter-rouge">~/labs/lab4</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 demo/run.py
+</code></pre></div></div>
+
+<p>The demo uses a <strong>fixed</strong> request in <code class="language-plaintext highlighter-rouge">demo/slice_request.py</code> — you will be asked to open and read it; <strong>do not edit</strong> it.</p>
+
+<p>The runner walks through four phases and pauses at each one. Follow along in the log files.</p>
+
+<blockquote class="tip">If you are familiar with <code>tmux</code>, it can be useful to manage the different terminals; however it is strictly optional.</blockquote>
+
+<hr />
+
+<!-- _class: divider -->
+
+<h1 id="exercises">Exercises</h1>
+
+<hr />
+
+<h1 id="exercise-workflow">Exercise workflow</h1>
+
+<ol>
+  <li>From <code class="language-plaintext highlighter-rouge">~/labs/lab4</code>, run:
+    <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 exercises/partX/run.py  <span class="c"># &lt;-- replace X e.g, part1, part2, or part3</span>
+</code></pre></div>    </div>
+  </li>
+  <li>The runner starts the network, configures SRv6, and starts traffic automatically — so you can <strong>see the problem first</strong></li>
+  <li>When the runner pauses, open <code class="language-plaintext highlighter-rouge">exercises/partX/slice_request.py</code> and edit the <code class="language-plaintext highlighter-rouge">SLICE_REQUEST</code> block</li>
+  <li>Press <strong>Ctrl+S</strong> to save <code class="language-plaintext highlighter-rouge">slice_request.py</code>, then press ENTER in the runner</li>
+  <li>The slice is applied and you observe the effect</li>
+  <li>The slice is torn down so you can see the behavior revert</li>
+</ol>
+
+<p>If a request is invalid or rejected, the runner prints the error and waits for you to edit and retry.</p>
+
+<blockquote class="warning">If the file is not saved yet, many editors show a small white dot in the tab. Save first with <code>Ctrl+S</code> or the runner will reuse the old request.</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="exercise-1--low-latency-path">Exercise 1 — Low-latency path</h1>
+
+<blockquote class="warning"><code>mininet&gt; exit</code> → <code>sudo mn -c</code> → <code>cd ~/labs/lab4</code></blockquote>
+
+<p><strong>Goal:</strong> ask for a lower-latency service from <code class="language-plaintext highlighter-rouge">h1</code> to <code class="language-plaintext highlighter-rouge">h2</code> while keeping the telemetry monitor in the chain.</p>
+
+<p>The runner shows you contention first, then asks you to edit <code class="language-plaintext highlighter-rouge">exercises/part1/slice_request.py</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 exercises/part1/run.py
+</code></pre></div></div>
+
+<blockquote class="note"><code>solutions/part1/slice_request.py</code></blockquote>
+
+<p>Watch these logs:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">tail</span> <span class="nt">-F</span> /tmp/iperf_h1.log
+<span class="nb">tail</span> <span class="nt">-F</span> /tmp/iperf_h3.log
+<span class="nb">tail</span> <span class="nt">-F</span> /tmp/ping_h1_h2.log
+<span class="nb">tail</span> <span class="nt">-F</span> /tmp/mb1_bandwidth.log
+</code></pre></div></div>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="exercise-2--service-chain">Exercise 2 — Service chain</h1>
+
+<blockquote class="warning"><code>mininet&gt; exit</code> → <code>sudo mn -c</code> → <code>cd ~/labs/lab4</code></blockquote>
+
+<p><strong>Goal:</strong> keep the standard path and best-effort bandwidth, but route traffic through both middleboxes in this order:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>telemetry monitor → security inspector → destination
+</code></pre></div></div>
+
+<p>The runner starts traffic first, then asks you to edit <code class="language-plaintext highlighter-rouge">exercises/part2/slice_request.py</code>.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 exercises/part2/run.py
+</code></pre></div></div>
+
+<p>Watch these logs:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">tail</span> <span class="nt">-F</span> /tmp/iperf_h1.log
+<span class="nb">tail</span> <span class="nt">-F</span> /tmp/iperf_h3.log
+<span class="nb">tail</span> <span class="nt">-F</span> /tmp/mb1_bandwidth.log
+<span class="nb">tail</span> <span class="nt">-F</span> /tmp/mb2_security.log
+</code></pre></div></div>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="exercise-3--admission-control">Exercise 3 — Admission control</h1>
+
+<blockquote class="warning"><code>mininet&gt; exit</code> → <code>sudo mn -c</code> → <code>cd ~/labs/lab4</code></blockquote>
+
+<p>The runner installs a fixed 8 Mbps slice for <code class="language-plaintext highlighter-rouge">h1</code>, then asks you to submit a competing request for <code class="language-plaintext highlighter-rouge">h3</code>. It retries until your request is admitted.</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">sudo </span>python3 exercises/part3/run.py   <span class="c"># edit exercises/part3/slice_request.py when prompted</span>
+</code></pre></div></div>
+
+<p>This controller uses first-come-first-served: the baseline slice keeps its reservation and your request is evaluated only against what remains. That raises a useful question — <strong>what if the second request were actually more important?</strong> A smarter controller might weigh priority, preemption, or SLA tier.</p>
+
+<p>Further reading: M. Sulaiman et al., <em>Coordinated Slicing and Admission Control using Multi-Agent Deep Reinforcement Learning</em>, IEEE TNSM, 20(2), 2023.</p>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="troubleshooting">Troubleshooting</h1>
+
+<p><strong>The runner hangs or pingAll fails at startup.</strong>
+Restart ONOS: <code class="language-plaintext highlighter-rouge">sudo docker restart onos</code>. Wait 2–3 minutes, then rerun.</p>
+
+<p><strong>Switches are not forwarding traffic.</strong>
+Check that <code class="language-plaintext highlighter-rouge">ipv6Forwarding</code> is <code class="language-plaintext highlighter-rouge">true</code>: <code class="language-plaintext highlighter-rouge">cfg get org.onosproject.fwd.ReactiveForwarding</code></p>
+
+<p><strong>The request file won’t load.</strong>
+Edit only the <code class="language-plaintext highlighter-rouge">SLICE_REQUEST</code> block and keep it a valid Python dictionary.</p>
+
+<p><strong>A middlebox log stays silent.</strong>
+Confirm that middlebox is listed in <code class="language-plaintext highlighter-rouge">waypoints</code> in your request.</p>
+
+<p><strong>The runner fails with <code class="language-plaintext highlighter-rouge">RTNETLINK answers: File exists</code> or similar.</strong>
+A previous Mininet run was not cleaned up. Run <code class="language-plaintext highlighter-rouge">sudo mn -c</code> and restart from <code class="language-plaintext highlighter-rouge">~/labs/lab4</code>.</p>
+
+<hr />
+
+<h1 id="summary">Summary</h1>
+
+<p>Lab 4 is where Labs 1–3 come together to illustrate the <strong>concepts</strong> behind simple transport slicing:</p>
+
+<ul>
+  <li><strong>Lab 1</strong> — programmable match/action rules steer traffic to the right queue</li>
+  <li><strong>Lab 2</strong> — an SDN controller translates one service request into concrete switch rules</li>
+  <li><strong>Lab 3</strong> — SRv6 steers traffic onto the right path and through the right waypoints</li>
+</ul>
+
+<p>A single request expressing a path objective, a service chain, and a bandwidth guarantee and a transport slice controller that realizes it.</p>
+
+<blockquote class="tip">Curious to go further? See the optional <a href="../../further-reading/">Further Reading</a> page for recent work on slice monitoring, fine-grained telemetry, and programmable offloading.</blockquote>
+
+<hr />
+
+<!-- _class: compact -->
+
+<h1 id="you-completed-workshop-3-transport-networks">You Completed Workshop 3: Transport Networks</h1>
+
+<div class="slide-figure compact">
+  <img src="../../assets/figures/success-meme.jpg" alt="Achievement unlocked meme used as a humorous finish to Lab 4." />
+</div>
+
+<p>Across the workshop, you:</p>
+
+<ul>
+  <li>learned how SDN enables programmable and flexible transport networks</li>
+  <li>worked hands-on with the key enablers such as OVS, Mininet, ONOS, and SRv6</li>
+  <li>saw how those pieces can come together in a simplified transport slice controller</li>
+</ul>
+
+<p>Congratulations on completing Workshop 3: Transport Networks!</p>
