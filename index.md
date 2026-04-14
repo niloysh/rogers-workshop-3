@@ -43,6 +43,9 @@ layout: page
 .quick-link.reference .quick-link-title{color:#1a6b57}
 .quick-link.feedback{border-left-color:#7a6a2e;background:#f5f0e0}
 .quick-link.feedback .quick-link-title{color:#7a6a2e}
+.quick-links-secondary{font-size:13px;color:#6b6860;line-height:1.65;margin:14px 0 0}
+.quick-links-secondary a{color:#3a3a3a;text-decoration:underline;text-underline-offset:2px}
+.quick-links-secondary a:hover{color:#1a1917}
 @media(max-width:600px){.schedule-row{grid-template-columns:52px 1fr 52px}.schedule-block{padding:12px 14px}}
 </style>
 

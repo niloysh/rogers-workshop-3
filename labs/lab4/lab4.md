@@ -316,6 +316,8 @@ Lab 4 is where Labs 1–3 come together to illustrate the **concepts** behind si
 
 A single request expressing a path objective, a service chain, and a bandwidth guarantee and a transport slice controller that realizes it.
 
+<blockquote class="tip">Curious to go further? See the optional <a href="../../further-reading/">Further Reading</a> page for recent work on slice monitoring, fine-grained telemetry, and programmable offloading.</blockquote>
+
 ---
 
 <!-- _class: compact -->
